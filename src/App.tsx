@@ -9,7 +9,7 @@ import { ConsentModal } from "@/components/ConsentModal";
 import Home from "./pages/Home";
 import Session from "./pages/Session";
 import History from "./pages/History";
-import Courses from "./pages/Courses";
+
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
@@ -27,7 +27,7 @@ const App = () => (
             <Route path="/home" element={<Home />} />
             <Route path="/session" element={<Session />} />
             <Route path="/history" element={<History />} />
-            <Route path="/courses" element={<Courses />} />
+            
             <Route path="/settings" element={<Settings />} />
           </Route>
           <Route path="*" element={<NotFound />} />
