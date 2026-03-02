@@ -3,16 +3,10 @@ import { Button } from '@/components/ui/button';
 import { useSessionStore } from '@/stores/sessionStore';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+
 
 export default function Home() {
-  const { setSessionStatus, courses, sessionStatus } = useSessionStore();
+  const { setSessionStatus, sessionStatus } = useSessionStore();
   const navigate = useNavigate();
 
   const handleStart = () => {
@@ -57,19 +51,6 @@ export default function Home() {
           </p>
         </div>
 
-        <Select>
-          <SelectTrigger className="w-full bg-muted border-border">
-            <SelectValue placeholder="Select a course (optional)" />
-          </SelectTrigger>
-          <SelectContent>
-            {courses.length === 0 && (
-              <SelectItem value="none" disabled>No courses yet</SelectItem>
-            )}
-            {courses.map((c) => (
-              <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
 
         <Button size="lg" className="w-full gap-2 text-base" onClick={handleStart}>
           <Play size={18} />
