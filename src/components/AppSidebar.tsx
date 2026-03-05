@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from 'react-router-dom';
-import { Home, Radio, Clock, Settings } from 'lucide-react';
+import { Home, Radio, Clock, Settings, LayoutDashboard } from 'lucide-react';
 import { useSessionStore } from '@/stores/sessionStore';
 import { cn } from '@/lib/utils';
 
@@ -7,7 +7,7 @@ const navItems = [
   { to: '/home', icon: Home, label: 'Home' },
   { to: '/session', icon: Radio, label: 'Session', requiresSession: true },
   { to: '/history', icon: Clock, label: 'History' },
-  
+  { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
 ];
 
 export function AppSidebar() {
