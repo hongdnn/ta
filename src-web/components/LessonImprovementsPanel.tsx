@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { improvementSuggestions } from "@/data/mockDashboardData";
+import { improvementSuggestions } from "../data/mockDashboardData";
 import { Badge } from "@/components/ui/badge";
 import { Sparkles, ArrowUpCircle, ArrowRightCircle, ArrowDownCircle } from "lucide-react";
 import { cn } from "@/lib/utils";

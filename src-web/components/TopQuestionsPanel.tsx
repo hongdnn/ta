@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { topQuestions, sessionEngagement } from "@/data/mockDashboardData";
+import { topQuestions, sessionEngagement } from "../data/mockDashboardData";
 import {
   ChartContainer,
   ChartTooltip,
