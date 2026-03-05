@@ -11,6 +11,7 @@ import Session from "./pages/Session";
 import History from "./pages/History";
 
 import Settings from "./pages/Settings";
+import Dashboard from "./pages/Dashboard";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -28,6 +29,7 @@ const App = () => (
             <Route path="/session" element={<Session />} />
             <Route path="/history" element={<History />} />
             
+            <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/settings" element={<Settings />} />
           </Route>
           <Route path="*" element={<NotFound />} />
