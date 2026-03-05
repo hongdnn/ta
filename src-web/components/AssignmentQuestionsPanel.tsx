@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { assignments, type Assignment } from "@/data/mockDashboardData";
+import { assignments, type Assignment } from "../data/mockDashboardData";
 import {
   Collapsible,
   CollapsibleContent,
