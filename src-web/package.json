@@ -1,0 +1,12 @@
+{
+  "name": "lecture-lens-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "note": "Dependencies are currently hoisted from the root package.json. When deploying independently, copy the relevant dependencies here and run install."
+}
