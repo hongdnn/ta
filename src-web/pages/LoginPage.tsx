@@ -13,7 +13,7 @@ export default function LoginPage() {
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     // TODO: real auth logic
-    navigate("/overview");
+    navigate("/courses");
   };
 
   return (
