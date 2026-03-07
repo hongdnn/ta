@@ -5,9 +5,10 @@ import { Toaster } from "@/components/ui/sonner";
 import { DashboardLayout } from "./components/DashboardLayout";
 import LandingPage from "./pages/LandingPage";
 import LoginPage from "./pages/LoginPage";
+import CourseSelectPage from "./pages/CourseSelectPage";
 import DashboardHome from "./pages/DashboardHome";
-import AssignmentsPage from "./pages/AssignmentsPage";
-import ImprovementsPage from "./pages/ImprovementsPage";
+import DocumentsPage from "./pages/DocumentsPage";
+import ProfilePage from "./pages/ProfilePage";
 
 const queryClient = new QueryClient();
 
@@ -20,11 +21,15 @@ export default function WebApp() {
           <Routes>
             <Route path="/" element={<LandingPage />} />
             <Route path="/login" element={<LoginPage />} />
-            <Route element={<DashboardLayout />}>
-              <Route path="/overview" element={<DashboardHome />} />
-              <Route path="/assignments" element={<AssignmentsPage />} />
-              <Route path="/improvements" element={<ImprovementsPage />} />
+            <Route path="/courses" element={<CourseSelectPage />} />
+            <Route path="/dashboard/:courseId" element={<DashboardLayout />}>
+              <Route index element={<Navigate to="overview" replace />} />
+              <Route path="overview" element={<DashboardHome />} />
+              <Route path="documents" element={<DocumentsPage />} />
+              <Route path="profile" element={<ProfilePage />} />
             </Route>
+            {/* Legacy redirects */}
+            <Route path="/overview" element={<Navigate to="/courses" replace />} />
           </Routes>
         </BrowserRouter>
       </TooltipProvider>
