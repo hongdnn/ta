@@ -12,6 +12,32 @@ dist
 dist-ssr
 *.local
 
+# Build outputs
+dist-electron
+release
+
+# Frontend/Electron
+*.tsbuildinfo
+
+# src-web standalone app
+src-web/node_modules
+src-web/dist
+src-web/.vite
+
+# Python backend
+backend/.venv
+backend/.pytest_cache
+backend/.mypy_cache
+backend/.ruff_cache
+backend/.coverage
+backend/htmlcov
+backend/**/__pycache__
+backend/**/*.pyc
+backend/*.egg-info
+backend/.env
+backend/*.json
+!backend/.env.example
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

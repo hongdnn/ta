@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "main": "dist-electron/main.js",
+  "main": "dist-electron/main.cjs",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -12,7 +12,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "electron:compile": "tsc -p electron/tsconfig.json",
+    "electron:compile": "tsc -p electron/tsconfig.json && mv dist-electron/main.js dist-electron/main.cjs && printf '{\"type\":\"commonjs\"}\n' > dist-electron/package.json",
     "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:8080 && npm run electron:compile && electron .\"",
     "electron:build": "vite build && npm run electron:compile && electron-builder"
   },
@@ -46,6 +46,7 @@
     "@radix-ui/react-toggle-group": "^1.1.10",
     "@radix-ui/react-tooltip": "^1.2.7",
     "@tanstack/react-query": "^5.83.0",
+    "axios": "^1.13.6",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",

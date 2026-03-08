@@ -13,7 +13,19 @@ function formatTime(ms: number) {
 }
 
 export function SessionTopBar() {
-  const { sessionStatus, sessionStartTime, stopSession, pauseSession, resumeSession, captureMoment, settings } = useSessionStore();
+  const {
+    sessionStatus,
+    sessionStartTime,
+    stopSession,
+    pauseSession,
+    resumeSession,
+    captureMoment,
+    settings,
+    bufferStatus,
+    lastCaptureUpload,
+    lastCaptureReason,
+    activeCourseName,
+  } = useSessionStore();
   const [elapsed, setElapsed] = useState(0);
   const navigate = useNavigate();
   const isPaused = sessionStatus === 'paused';
@@ -34,7 +46,7 @@ export function SessionTopBar() {
   return (
     <div className="flex items-center gap-3 px-4 py-2.5 bg-card border-b border-border">
       <Badge variant="outline" className="text-xs bg-muted/50">
-        No Course
+        {activeCourseName || 'No Course'}
       </Badge>
 
       <div className="flex items-center gap-1.5">
@@ -54,6 +66,20 @@ export function SessionTopBar() {
       <Badge variant="outline" className="text-[10px] text-muted-foreground">
         Last {settings.captureDuration}s
       </Badge>
+
+      <Badge variant="outline" className="text-[10px] text-muted-foreground">
+        Audio Buffer: {bufferStatus}
+      </Badge>
+
+      <Badge variant="outline" className="text-[10px] text-muted-foreground">
+        Upload: {lastCaptureUpload}
+      </Badge>
+
+      {lastCaptureReason && (
+        <Badge variant="outline" className="text-[10px] text-destructive border-destructive/40">
+          {lastCaptureReason}
+        </Badge>
+      )}
 
       <Button size="sm" variant="default" className="gap-1.5 text-xs" onClick={captureMoment}>
         <Camera size={14} />

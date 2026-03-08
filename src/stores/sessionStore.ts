@@ -1,4 +1,8 @@
 import { create } from 'zustand';
+import { audioRingBuffer } from '@/lib/audioRingBuffer';
+import { ASSIST_PATH, uploadCapture } from '@/api/captures';
+import { ApiClientError, getApiBaseUrl } from '@/api/apiClient';
+import { captureSourceFrame } from '@/lib/frameCapture';
 
 export type SessionStatus = 'idle' | 'source-picking' | 'consenting' | 'active' | 'paused';
 export type AssistantState = 'idle' | 'capturing' | 'processing' | 'result';
@@ -25,6 +29,22 @@ export interface Course {
   isActive: boolean;
 }
 
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  text: string;
+  createdAt: number;
+}
+
+function logToTerminal(level: 'info' | 'warn' | 'error', message: string, meta?: unknown) {
+  window.taAPI?.log(level, message, meta);
+}
+
+const isMac = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform);
+const CONTEXT_RETRY_COUNT = 4;
+const CONTEXT_RETRY_DELAY_MS = 600;
+const USE_NATIVE_AUDIO = isMac;
+
 interface SessionStore {
   // Session
   sessionStatus: SessionStatus;
@@ -32,12 +52,17 @@ interface SessionStore {
   includeAudio: boolean;
   audioSource: string;
   sessionStartTime: number | null;
+  activeInstitutionId: string | null;
+  activeInstitutionName: string | null;
   activeCourse: string | null;
+  activeCourseName: string | null;
 
   // Assistant
   assistantState: AssistantState;
   processingStep: ProcessingStep;
   inputText: string;
+  lastAssistantAnswer: string;
+  messages: ChatMessage[];
 
   // History
   historyItems: HistoryItem[];
@@ -54,13 +79,16 @@ interface SessionStore {
     localOnly: boolean;
     autoSaveCaptures: boolean;
   };
+  bufferStatus: 'idle' | 'starting' | 'running' | 'error';
+  lastCaptureUpload: 'idle' | 'uploading' | 'success' | 'error';
+  lastCaptureReason: string | null;
 
   // Actions
   setSessionStatus: (status: SessionStatus) => void;
   setSelectedSource: (source: SharedSource | null) => void;
   setIncludeAudio: (v: boolean) => void;
   setAudioSource: (v: string) => void;
-  startSession: () => void;
+  startSession: () => Promise<void>;
   stopSession: () => void;
   pauseSession: () => void;
   resumeSession: () => void;
@@ -76,6 +104,12 @@ interface SessionStore {
   addMaterial: (courseId: string, fileName: string) => void;
   updateSettings: (settings: Partial<SessionStore['settings']>) => void;
   setActiveCourseId: (id: string | null) => void;
+  setSessionContext: (payload: {
+    institutionId: string | null;
+    institutionName: string | null;
+    courseId: string | null;
+    courseName: string | null;
+  }) => void;
 }
 
 export const useSessionStore = create<SessionStore>((set, get) => ({
@@ -84,11 +118,16 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   includeAudio: true,
   audioSource: 'system',
   sessionStartTime: null,
+  activeInstitutionId: null,
+  activeInstitutionName: null,
   activeCourse: null,
+  activeCourseName: null,
 
   assistantState: 'idle',
   processingStep: 'CAPTURING',
   inputText: '',
+  lastAssistantAnswer: '',
+  messages: [],
 
   historyItems: [],
   courses: [],
@@ -101,14 +140,68 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     localOnly: true,
     autoSaveCaptures: false,
   },
+  bufferStatus: 'idle',
+  lastCaptureUpload: 'idle',
+  lastCaptureReason: null,
 
   setSessionStatus: (status) => set({ sessionStatus: status }),
   setSelectedSource: (source) => set({ selectedSource: source }),
   setIncludeAudio: (v) => set({ includeAudio: v }),
   setAudioSource: (v) => set({ audioSource: v }),
 
-  startSession: () => set({ sessionStatus: 'active', sessionStartTime: Date.now(), assistantState: 'idle' }),
-  stopSession: () => set({ sessionStatus: 'idle', selectedSource: null, sessionStartTime: null, assistantState: 'idle' }),
+  startSession: async () => {
+    const { selectedSource, settings } = get();
+    set({
+      sessionStatus: 'active',
+      sessionStartTime: Date.now(),
+      assistantState: 'idle',
+      bufferStatus: 'starting',
+      lastAssistantAnswer: '',
+      messages: [],
+    });
+    if (!selectedSource) {
+      set({ bufferStatus: 'error', lastCaptureReason: 'No source selected.' });
+      logToTerminal('error', 'Session start failed: no source selected');
+      return;
+    }
+    try {
+      // Always keep renderer audio ring buffer running so we have a stable 20s fallback.
+      if (window.taAPI?.setDisplayMediaSource) {
+        await window.taAPI.setDisplayMediaSource(selectedSource.id);
+      }
+      await audioRingBuffer.startDesktopAudio(selectedSource.id);
+      set({ bufferStatus: 'running', lastCaptureReason: null });
+
+      if (USE_NATIVE_AUDIO && window.taAPI?.nativeAudioStart) {
+        try {
+          await window.taAPI.nativeAudioStart(selectedSource);
+        } catch (nativeError) {
+          logToTerminal('warn', 'Native audio start failed. Using renderer audio ring buffer only.', nativeError);
+        }
+      }
+    } catch (error) {
+      set({ bufferStatus: 'error', lastCaptureReason: 'Failed to start audio buffer.' });
+      console.error('[TA] Failed to start audio buffer', error);
+      logToTerminal('error', 'Failed to start audio buffer', error);
+    }
+  },
+  stopSession: () => {
+    if (window.taAPI?.nativeAudioStop) {
+      void window.taAPI.nativeAudioStop();
+    }
+    audioRingBuffer.stop();
+    set({
+      sessionStatus: 'idle',
+      selectedSource: null,
+      sessionStartTime: null,
+      assistantState: 'idle',
+      bufferStatus: 'idle',
+      lastCaptureUpload: 'idle',
+      lastCaptureReason: null,
+      lastAssistantAnswer: '',
+      messages: [],
+    });
+  },
   pauseSession: () => set({ sessionStatus: 'paused' }),
   resumeSession: () => set({ sessionStatus: 'active' }),
 
@@ -117,19 +210,36 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   setInputText: (text) => set({ inputText: text }),
 
   captureMoment: () => {
-    const { sessionStatus } = get();
+    const { sessionStatus, selectedSource } = get();
     if (sessionStatus !== 'active') return;
+    const captureQuestion = '';
+    pushMessage('user', 'Capture moment');
     set({ assistantState: 'capturing', processingStep: 'CAPTURING' });
     setTimeout(() => set({ processingStep: 'PROCESSING' }), 800);
-    setTimeout(() => set({ processingStep: 'DONE', assistantState: 'result' }), 2000);
+
+    if (!selectedSource) {
+      set({ lastCaptureUpload: 'error', lastCaptureReason: 'No source selected for capture.' });
+      pushMessage('assistant', 'No source selected for capture.');
+      logToTerminal('error', 'Capture failed: no source selected');
+      return;
+    }
+    void uploadQuestionWithContext(captureQuestion, true);
   },
 
   sendQuestion: (question) => {
     const { sessionStatus } = get();
     if (sessionStatus !== 'active') return;
-    set({ assistantState: 'capturing', processingStep: 'CAPTURING', inputText: '' });
-    setTimeout(() => set({ processingStep: 'PROCESSING' }), 400);
-    setTimeout(() => set({ processingStep: 'DONE', assistantState: 'result' }), 1500);
+    const trimmed = question.trim();
+    if (!trimmed) return;
+    pushMessage('user', trimmed);
+    set({
+      assistantState: 'processing',
+      processingStep: 'PROCESSING',
+      inputText: '',
+      lastCaptureUpload: 'uploading',
+      lastCaptureReason: null,
+    });
+    void uploadQuestionWithContext(trimmed);
   },
 
   addHistoryItem: (item) => set((s) => ({
@@ -160,4 +270,187 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   })),
 
   setActiveCourseId: (id) => set({ activeCourse: id }),
+  setSessionContext: ({ institutionId, institutionName, courseId, courseName }) => set({
+    activeInstitutionId: institutionId,
+    activeInstitutionName: institutionName,
+    activeCourse: courseId,
+    activeCourseName: courseName,
+  }),
 }));
+
+function pushMessage(role: 'user' | 'assistant', text: string) {
+  const trimmed = text.trim();
+  if (!trimmed) return;
+  useSessionStore.setState((s) => ({
+    messages: [...s.messages, { id: crypto.randomUUID(), role, text: trimmed, createdAt: Date.now() }],
+  }));
+}
+
+async function uploadFromContext(
+  audioClip: Blob | null,
+  frameImage: Blob,
+  userText: string,
+  captureTriggered: boolean
+) {
+  const { selectedSource, settings } = useSessionStore.getState();
+  if (!selectedSource) return;
+
+  useSessionStore.setState({ lastCaptureUpload: 'uploading', lastCaptureReason: null });
+  logToTerminal('info', 'Uploading capture audio', {
+    bytes: audioClip?.size ?? 0,
+    frameBytes: frameImage.size,
+    sourceId: selectedSource.id,
+    captureDuration: settings.captureDuration,
+  });
+
+  try {
+    const response = await uploadCapture({
+      audioClip,
+      frameImage,
+      sourceId: selectedSource.id,
+      sourceType: selectedSource.type,
+      captureDurationSeconds: settings.captureDuration,
+      courseName: useSessionStore.getState().activeCourseName ?? '',
+      capturedAt: new Date().toISOString(),
+      userText,
+      captureTriggered,
+      sessionId: useSessionStore.getState().activeCourse ?? 'default',
+    });
+    pushMessage('assistant', response.answer ?? '');
+    useSessionStore.setState({
+      lastCaptureUpload: 'success',
+      lastCaptureReason: null,
+      lastAssistantAnswer: response.answer ?? '',
+      assistantState: 'result',
+      processingStep: 'DONE',
+    });
+    logToTerminal('info', 'Capture upload success');
+  } catch (error) {
+    let message = 'Capture upload failed.';
+    if (error instanceof ApiClientError) {
+      if (error.status === 404) {
+        message = `Backend route not found: ${error.method ?? 'POST'} ${error.url ?? `${getApiBaseUrl()}${ASSIST_PATH}`}`;
+      } else if (error.code === 'ECONNABORTED') {
+        message = `Backend request timed out after 60s: ${error.url ?? `${getApiBaseUrl()}${ASSIST_PATH}`}`;
+      } else if (error.status === null) {
+        message = `Cannot reach backend: ${getApiBaseUrl()}`;
+      } else {
+        message = `${error.message}${error.url ? ` (${error.url})` : ''}`;
+      }
+    } else if (error instanceof Error) {
+      message = error.message;
+    }
+    useSessionStore.setState({
+      lastCaptureUpload: 'error',
+      lastCaptureReason: message,
+      assistantState: 'result',
+      processingStep: 'DONE',
+      lastAssistantAnswer: message,
+    });
+    pushMessage('assistant', message);
+    logToTerminal('error', message, error);
+  }
+}
+
+async function uploadQuestionWithContext(userText: string, captureTriggered = false) {
+  const { selectedSource, settings } = useSessionStore.getState();
+  if (!selectedSource) {
+    const message = 'No source selected. Start sharing first.';
+    useSessionStore.setState({
+      lastCaptureUpload: 'error',
+      lastCaptureReason: message,
+      assistantState: 'result',
+      processingStep: 'DONE',
+      lastAssistantAnswer: message,
+    });
+    pushMessage('assistant', message);
+    logToTerminal('error', message);
+    return;
+  }
+
+  const audioClip = await waitForAudioClip(settings.captureDuration, selectedSource.id);
+  const frameImage = await waitForFrame(selectedSource.id);
+  if (!audioClip || !frameImage) {
+    const message = 'Context not ready yet. Please wait 1-2 seconds and try again.';
+    useSessionStore.setState({
+      lastCaptureUpload: 'error',
+      lastCaptureReason: message,
+      assistantState: 'result',
+      processingStep: 'DONE',
+      lastAssistantAnswer: message,
+    });
+    pushMessage('assistant', message);
+    logToTerminal('warn', 'Question blocked: missing required context payload', {
+      hasAudio: !!audioClip,
+      hasFrame: !!frameImage,
+      sourceId: selectedSource.id,
+    });
+    return;
+  }
+
+  logToTerminal('info', 'Uploading question with context', {
+    bytes: audioClip.size,
+    frameBytes: frameImage.size,
+    sourceId: selectedSource.id,
+    captureDuration: settings.captureDuration,
+  });
+
+  await uploadFromContext(audioClip, frameImage, userText, captureTriggered);
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForAudioClip(seconds: number, sourceId: string): Promise<Blob | null> {
+  for (let i = 0; i < CONTEXT_RETRY_COUNT; i += 1) {
+    if (USE_NATIVE_AUDIO && window.taAPI?.nativeAudioGetSlice) {
+      try {
+        const debug = (await window.taAPI.nativeAudioDebug(seconds)) as {
+          recentChunks?: number;
+          recentBytes?: number;
+          avgWindowDbfs?: number | null;
+          lastChunkDbfs?: number | null;
+        };
+        logToTerminal('info', 'Native audio debug snapshot', debug);
+        const hasNativeData = (debug.recentChunks ?? 0) > 0 && (debug.recentBytes ?? 0) > 44;
+        const nativeLooksAudible = (debug.avgWindowDbfs ?? -120) > -95 || (debug.lastChunkDbfs ?? -120) > -95;
+        if (hasNativeData && nativeLooksAudible) {
+          const wavBytes = await window.taAPI.nativeAudioGetSlice(seconds);
+          if (wavBytes && wavBytes.length > 44) {
+            return new Blob([wavBytes], { type: 'audio/wav' });
+          }
+        }
+      } catch {
+        // continue retries
+      }
+    }
+    const fallback = audioRingBuffer.getLastSeconds(seconds);
+    if (fallback) return fallback;
+    await delay(CONTEXT_RETRY_DELAY_MS);
+  }
+
+  // Native is running but produced no chunks: switch to renderer audio buffer and retry once.
+  if (!audioRingBuffer.isRunning()) {
+    try {
+      await audioRingBuffer.startDesktopAudio(sourceId);
+      logToTerminal('warn', 'Native audio produced no chunks; switched to renderer audio fallback.');
+      await delay(CONTEXT_RETRY_DELAY_MS);
+      const fallback = audioRingBuffer.getLastSeconds(seconds);
+      if (fallback) return fallback;
+    } catch (error) {
+      logToTerminal('error', 'Renderer audio fallback start failed', error);
+    }
+  }
+
+  return null;
+}
+
+async function waitForFrame(sourceId: string): Promise<Blob | null> {
+  for (let i = 0; i < CONTEXT_RETRY_COUNT; i += 1) {
+    const frame = await captureSourceFrame(sourceId).catch(() => null);
+    if (frame && frame.size > 0) return frame;
+    await delay(CONTEXT_RETRY_DELAY_MS);
+  }
+  return null;
+}

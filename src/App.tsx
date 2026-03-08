@@ -5,7 +5,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AppLayout } from "@/components/AppLayout";
 import { SourcePickerModal } from "@/components/SourcePickerModal";
-import { ConsentModal } from "@/components/ConsentModal";
 import Home from "./pages/Home";
 import Session from "./pages/Session";
 import History from "./pages/History";
@@ -33,7 +32,6 @@ const App = () => (
           <Route path="*" element={<NotFound />} />
         </Routes>
         <SourcePickerModal />
-        <ConsentModal />
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

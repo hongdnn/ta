@@ -7,14 +7,32 @@ import {
   Menu,
   nativeImage,
   shell,
+  desktopCapturer,
+  session,
 } from 'electron';
 import path from 'path';
 import { setupIpcHandlers } from './ipc';
+import { NativeAudioManager } from './nativeAudio';
+
+// Enable macOS loopback system audio for desktop capture streams.
+// Without this, renderer desktop audio can be present but silent on some macOS setups.
+if (process.platform === 'darwin') {
+  const existing = app.commandLine.getSwitchValue('enable-features');
+  const feature = 'MacLoopbackAudioForScreenShare';
+  if (!existing.includes(feature)) {
+    app.commandLine.appendSwitch(
+      'enable-features',
+      existing ? `${existing},${feature}` : feature
+    );
+  }
+}
 
 let mainWindow: BrowserWindow | null = null;
 let miniPanel: BrowserWindow | null = null;
 let settingsWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
+const nativeAudioManager = new NativeAudioManager();
+let activeDisplayMediaSourceId: string | null = null;
 
 const isDev = !app.isPackaged;
 
@@ -202,11 +220,72 @@ function setupWindowIpc() {
   ipcMain.on('ta:session-status-changed', (_e, active: boolean) => {
     updateTrayMenu(active);
   });
+  ipcMain.on(
+    'ta:renderer-log',
+    (_e, level: 'info' | 'warn' | 'error', message: string, meta?: unknown) => {
+      const prefix = '[TA-RENDERER]';
+      if (level === 'error') {
+        console.error(prefix, message, meta ?? '');
+        return;
+      }
+      if (level === 'warn') {
+        console.warn(prefix, message, meta ?? '');
+        return;
+      }
+      console.log(prefix, message, meta ?? '');
+    }
+  );
+  ipcMain.handle(
+    'ta:native-audio-start',
+    async (_e, source: { id: string; type: 'screen' | 'window' | 'tab'; name: string }) => {
+      await nativeAudioManager.start(source);
+      return nativeAudioManager.getDebug(20);
+    }
+  );
+  ipcMain.handle('ta:set-display-media-source', (_e, sourceId: string) => {
+    activeDisplayMediaSourceId = sourceId || null;
+  });
+  ipcMain.handle('ta:native-audio-stop', () => {
+    nativeAudioManager.stop();
+  });
+  ipcMain.handle('ta:native-audio-get-slice', (_e, seconds: number) => {
+    return nativeAudioManager.getSliceWav(seconds);
+  });
+  ipcMain.handle('ta:native-audio-debug', (_e, seconds: number) => {
+    return nativeAudioManager.getDebug(seconds);
+  });
 }
 
 // ── App lifecycle ────────────────────────────────────────────
 
 app.whenReady().then(() => {
+  session.defaultSession.setDisplayMediaRequestHandler(
+    async (_request, callback) => {
+      try {
+        const sources = await desktopCapturer.getSources({
+          types: ['screen', 'window'],
+          thumbnailSize: { width: 1, height: 1 },
+        });
+        const selected = activeDisplayMediaSourceId
+          ? sources.find((source) => source.id === activeDisplayMediaSourceId)
+          : null;
+        const fallback = sources.find((source) => source.id.startsWith('screen:')) ?? sources[0];
+        const chosen = selected ?? fallback;
+        if (!chosen) {
+          callback({});
+          return;
+        }
+        callback({
+          video: chosen,
+          audio: 'loopback',
+        });
+      } catch {
+        callback({});
+      }
+    },
+    { useSystemPicker: false }
+  );
+
   setupIpcHandlers();
   setupWindowIpc();
   createMainWindow();
@@ -223,5 +302,6 @@ app.on('window-all-closed', () => {
 });
 
 app.on('will-quit', () => {
+  nativeAudioManager.stop();
   globalShortcut.unregisterAll();
 });

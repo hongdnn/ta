@@ -1,0 +1,30 @@
+[project]
+name = "ta-backend"
+version = "0.1.0"
+description = "FastAPI backend for TA capture ingestion and STT"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi==0.115.8",
+  "uvicorn[standard]==0.34.0",
+  "python-multipart==0.0.20",
+  "faster-whisper==1.1.1",
+  "requests>=2.32.0",
+  "google-cloud-vision>=3.8.1",
+  "google-genai>=1.31.0",
+  "python-dotenv>=1.0.1",
+  "opencv-python-headless>=4.10.0.84",
+  "numpy>=1.26.0",
+  "langgraph>=0.2.66",
+  "pymongo>=4.8.0",
+  "passlib>=1.7.4",
+  "PyJWT>=2.9.0",
+  "email-validator>=2.2.0",
+]
+
+[project.scripts]
+backend = "app.cli:main"
+ta-backend = "app.cli:main"
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
