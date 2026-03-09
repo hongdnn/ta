@@ -80,7 +80,7 @@ export default function Home() {
   }, [institutionId]);
 
   // If session is active, go straight to session screen.
-  if (sessionStatus === 'active' || sessionStatus === 'paused') {
+  if (sessionStatus === 'active') {
     return <Navigate to="/session" replace />;
   }
 

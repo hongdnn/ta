@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
-from app.dependencies import get_assist_service
+from app.dependencies import get_assist_service, get_auth_context
+from app.schemas.auth_context import AuthContext
 from app.schemas.capture import CaptureResponse
 from app.services.assist_service import AssistService
 
@@ -22,11 +23,12 @@ async def create_capture(
     captureDurationSeconds: int | None = Form(default=None),
     courseName: str | None = Form(default=None),
     capturedAt: str | None = Form(default=None),
+    auth: AuthContext = Depends(get_auth_context),
     service: AssistService = Depends(get_assist_service),
 ):
     capture_triggered = (captureTriggered or "false").lower() in {"true", "1", "yes", "on"}
     session_id = (sessionId or "default").strip() or "default"
-    user_text = (userText or "").strip()
+    user_text = userText if userText is not None else ""
     audio_bytes = await audio.read() if audio is not None else None
     frame_bytes = await frame.read() if frame is not None else None
     try:
@@ -42,6 +44,7 @@ async def create_capture(
             capture_duration_seconds=captureDurationSeconds,
             course_name=courseName,
             captured_at=capturedAt,
+            user_id=auth.user_id,
         )
     except Exception as exc:  # noqa: BLE001
         print(f"[TA-BACKEND] Assist pipeline failed: {exc}", flush=True)

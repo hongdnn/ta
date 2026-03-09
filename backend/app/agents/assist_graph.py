@@ -116,6 +116,10 @@ def classify_intent_node(state: AssistState) -> AssistState:
         '  "router_reason": "short reason"\n'
         "}\n"
         "Use wants_context_reference=true if user asks about this case/this lesson/what is on screen/current explanation.\n"
+        "Treat short generic follow-up commands as context-referential by default in an active session.\n"
+        "If the user message is brief and does not name a standalone theory topic, classify as context_only.\n"
+        "Examples: explain this, explain deeper, explain simpler, summarize, what should I focus on, give me a hint.\n"
+        "For these follow-ups, set intent=context_only and should_run_context=true.\n"
         "Use should_run_context=true when context is needed or capture was triggered.\n"
         "If user asks pure theory not tied to current context, should_run_context=false.\n\n"
         f"capture_triggered={capture_triggered}\n"

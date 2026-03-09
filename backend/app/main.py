@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.routes.assist import router as assist_router
 from app.routes.auth import router as auth_router
 from app.routes.catalog import router as catalog_router
+from app.routes.session import router as session_router
 from app.core.config import settings
 from app.db.mongo_schema import init_mongo_schema
 
@@ -24,6 +25,7 @@ app.add_middleware(
 
 app.include_router(auth_router)
 app.include_router(catalog_router)
+app.include_router(session_router)
 app.include_router(assist_router)
 
 

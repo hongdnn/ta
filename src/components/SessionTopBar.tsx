@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Camera, Pause, Play, Square, Keyboard } from 'lucide-react';
+import { Camera, Square } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useSessionStore } from '@/stores/sessionStore';
@@ -17,10 +17,7 @@ export function SessionTopBar() {
     sessionStatus,
     sessionStartTime,
     stopSession,
-    pauseSession,
-    resumeSession,
     captureMoment,
-    settings,
     bufferStatus,
     lastCaptureUpload,
     lastCaptureReason,
@@ -28,18 +25,17 @@ export function SessionTopBar() {
   } = useSessionStore();
   const [elapsed, setElapsed] = useState(0);
   const navigate = useNavigate();
-  const isPaused = sessionStatus === 'paused';
 
   useEffect(() => {
-    if (!sessionStartTime || isPaused) return;
+    if (!sessionStartTime || sessionStatus !== 'active') return;
     const interval = setInterval(() => {
       setElapsed(Date.now() - sessionStartTime);
     }, 1000);
     return () => clearInterval(interval);
-  }, [sessionStartTime, isPaused]);
+  }, [sessionStartTime, sessionStatus]);
 
   const handleStop = () => {
-    stopSession();
+    void stopSession();
     navigate('/home');
   };
 
@@ -58,17 +54,8 @@ export function SessionTopBar() {
 
       <div className="flex-1" />
 
-      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <Keyboard size={12} />
-        <kbd className="px-1.5 py-0.5 rounded bg-muted font-mono text-[10px]">{settings.hotkey}</kbd>
-      </div>
-
       <Badge variant="outline" className="text-[10px] text-muted-foreground">
-        Last {settings.captureDuration}s
-      </Badge>
-
-      <Badge variant="outline" className="text-[10px] text-muted-foreground">
-        Audio Buffer: {bufferStatus}
+        Audio: {bufferStatus}
       </Badge>
 
       <Badge variant="outline" className="text-[10px] text-muted-foreground">
@@ -83,16 +70,7 @@ export function SessionTopBar() {
 
       <Button size="sm" variant="default" className="gap-1.5 text-xs" onClick={captureMoment}>
         <Camera size={14} />
-        Capture Moment
-      </Button>
-
-      <Button
-        size="sm"
-        variant="ghost"
-        className="text-xs"
-        onClick={isPaused ? resumeSession : pauseSession}
-      >
-        {isPaused ? <Play size={14} /> : <Pause size={14} />}
+        Ask Me
       </Button>
 
       <Button size="sm" variant="ghost" className="text-xs text-destructive hover:text-destructive" onClick={handleStop}>

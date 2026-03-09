@@ -13,7 +13,7 @@ const navItems = [
 export function AppSidebar() {
   const location = useLocation();
   const sessionStatus = useSessionStore((s) => s.sessionStatus);
-  const isSessionActive = sessionStatus === 'active' || sessionStatus === 'paused';
+  const isSessionActive = sessionStatus === 'active';
 
   return (
     <div className="flex flex-col w-16 bg-sidebar border-r border-sidebar-border items-center py-4 gap-1">

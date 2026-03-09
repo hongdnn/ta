@@ -11,7 +11,7 @@ const commands = [
   { id: 'history', label: 'Go to History', icon: Clock, path: '/history' },
   { id: 'courses', label: 'Go to Courses', icon: BookOpen, path: '/courses' },
   { id: 'settings', label: 'Open Settings', icon: Settings, path: '/settings' },
-  { id: 'capture', label: 'Capture Moment', icon: Camera, action: 'capture', requiresSession: true },
+  { id: 'capture', label: 'Ask Me', icon: Camera, action: 'capture', requiresSession: true },
 ];
 
 export function CommandPalette() {

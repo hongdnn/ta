@@ -6,7 +6,7 @@ import { Navigate } from 'react-router-dom';
 export default function Session() {
   const { sessionStatus } = useSessionStore();
 
-  if (sessionStatus !== 'active' && sessionStatus !== 'paused') {
+  if (sessionStatus !== 'active') {
     return <Navigate to="/home" replace />;
   }
 

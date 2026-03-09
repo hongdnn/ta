@@ -2,9 +2,10 @@ import { create } from 'zustand';
 import { audioRingBuffer } from '@/lib/audioRingBuffer';
 import { ASSIST_PATH, uploadCapture } from '@/api/captures';
 import { ApiClientError, getApiBaseUrl } from '@/api/apiClient';
+import { createSession, endSession } from '@/api/sessions';
 import { captureSourceFrame } from '@/lib/frameCapture';
 
-export type SessionStatus = 'idle' | 'source-picking' | 'consenting' | 'active' | 'paused';
+export type SessionStatus = 'idle' | 'source-picking' | 'consenting' | 'active';
 export type AssistantState = 'idle' | 'capturing' | 'processing' | 'result';
 export type ProcessingStep = 'CAPTURING' | 'PROCESSING' | 'DONE';
 
@@ -56,6 +57,7 @@ interface SessionStore {
   activeInstitutionName: string | null;
   activeCourse: string | null;
   activeCourseName: string | null;
+  backendSessionId: string | null;
 
   // Assistant
   assistantState: AssistantState;
@@ -89,9 +91,7 @@ interface SessionStore {
   setIncludeAudio: (v: boolean) => void;
   setAudioSource: (v: string) => void;
   startSession: () => Promise<void>;
-  stopSession: () => void;
-  pauseSession: () => void;
-  resumeSession: () => void;
+  stopSession: () => Promise<void>;
   setAssistantState: (state: AssistantState) => void;
   setProcessingStep: (step: ProcessingStep) => void;
   setInputText: (text: string) => void;
@@ -122,6 +122,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   activeInstitutionName: null,
   activeCourse: null,
   activeCourseName: null,
+  backendSessionId: null,
 
   assistantState: 'idle',
   processingStep: 'CAPTURING',
@@ -150,21 +151,29 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   setAudioSource: (v) => set({ audioSource: v }),
 
   startSession: async () => {
-    const { selectedSource, settings } = get();
-    set({
-      sessionStatus: 'active',
-      sessionStartTime: Date.now(),
-      assistantState: 'idle',
-      bufferStatus: 'starting',
-      lastAssistantAnswer: '',
-      messages: [],
-    });
+    const { selectedSource, settings, activeCourse } = get();
     if (!selectedSource) {
       set({ bufferStatus: 'error', lastCaptureReason: 'No source selected.' });
       logToTerminal('error', 'Session start failed: no source selected');
       return;
     }
+    if (!activeCourse) {
+      set({ bufferStatus: 'error', lastCaptureReason: 'No course selected.' });
+      logToTerminal('error', 'Session start failed: no course selected');
+      return;
+    }
     try {
+      const session = await createSession(activeCourse);
+      set({
+        backendSessionId: session.session_id,
+        sessionStatus: 'active',
+        sessionStartTime: Date.now(),
+        assistantState: 'idle',
+        bufferStatus: 'starting',
+        lastAssistantAnswer: '',
+        messages: [],
+      });
+
       // Always keep renderer audio ring buffer running so we have a stable 20s fallback.
       if (window.taAPI?.setDisplayMediaSource) {
         await window.taAPI.setDisplayMediaSource(selectedSource.id);
@@ -185,7 +194,15 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       logToTerminal('error', 'Failed to start audio buffer', error);
     }
   },
-  stopSession: () => {
+  stopSession: async () => {
+    const { backendSessionId } = get();
+    if (backendSessionId) {
+      try {
+        await endSession(backendSessionId);
+      } catch (error) {
+        logToTerminal('warn', 'Failed to persist session end on backend', error);
+      }
+    }
     if (window.taAPI?.nativeAudioStop) {
       void window.taAPI.nativeAudioStop();
     }
@@ -194,6 +211,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       sessionStatus: 'idle',
       selectedSource: null,
       sessionStartTime: null,
+      backendSessionId: null,
       assistantState: 'idle',
       bufferStatus: 'idle',
       lastCaptureUpload: 'idle',
@@ -202,9 +220,6 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       messages: [],
     });
   },
-  pauseSession: () => set({ sessionStatus: 'paused' }),
-  resumeSession: () => set({ sessionStatus: 'active' }),
-
   setAssistantState: (state) => set({ assistantState: state }),
   setProcessingStep: (step) => set({ processingStep: step }),
   setInputText: (text) => set({ inputText: text }),
@@ -212,10 +227,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
   captureMoment: () => {
     const { sessionStatus, selectedSource } = get();
     if (sessionStatus !== 'active') return;
-    const captureQuestion = '';
-    pushMessage('user', 'Capture moment');
+    const captureQuestion = 'Explain this';
+    pushMessage('user', captureQuestion);
     set({ assistantState: 'capturing', processingStep: 'CAPTURING' });
-    setTimeout(() => set({ processingStep: 'PROCESSING' }), 800);
 
     if (!selectedSource) {
       set({ lastCaptureUpload: 'error', lastCaptureReason: 'No source selected for capture.' });
@@ -292,8 +306,11 @@ async function uploadFromContext(
   userText: string,
   captureTriggered: boolean
 ) {
-  const { selectedSource, settings } = useSessionStore.getState();
+  const { selectedSource, settings, backendSessionId } = useSessionStore.getState();
   if (!selectedSource) return;
+  if (!backendSessionId) {
+    throw new Error('Missing backend session id');
+  }
 
   useSessionStore.setState({ lastCaptureUpload: 'uploading', lastCaptureReason: null });
   logToTerminal('info', 'Uploading capture audio', {
@@ -314,7 +331,7 @@ async function uploadFromContext(
       capturedAt: new Date().toISOString(),
       userText,
       captureTriggered,
-      sessionId: useSessionStore.getState().activeCourse ?? 'default',
+      sessionId: backendSessionId,
     });
     pushMessage('assistant', response.answer ?? '');
     useSessionStore.setState({
@@ -395,6 +412,7 @@ async function uploadQuestionWithContext(userText: string, captureTriggered = fa
     captureDuration: settings.captureDuration,
   });
 
+  useSessionStore.setState({ processingStep: 'PROCESSING' });
   await uploadFromContext(audioClip, frameImage, userText, captureTriggered);
 }
 

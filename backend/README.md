@@ -31,8 +31,9 @@ app/
       student_course.py
       professor_course.py
       session.py
-      question.py
+      message.py
       cluster.py
+      cluster_weekly_stats.py
     documents/
       user.py
     repositories/
@@ -67,8 +68,9 @@ app/
   - student_courses
   - professor_courses
   - sessions
-  - questions
+  - messages
   - clusters
+  - cluster_weekly_stats
 
 ## Requirements
 

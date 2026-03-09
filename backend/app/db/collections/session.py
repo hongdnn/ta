@@ -12,7 +12,7 @@ VALIDATOR = {
         "required": ["course_id", "user_id", "started_at", "session_status", "created_at", "updated_at"],
         "properties": {
             "course_id": {"bsonType": "objectId"},
-            "user_id": {"bsonType": "objectId"},
+            "user_id": {"bsonType": ["objectId", "null"]},
             "started_at": {"bsonType": "date"},
             "ended_at": {"bsonType": ["date", "null"]},
             "session_status": {"enum": ["active", "ended"]},
@@ -30,4 +30,3 @@ def apply_indexes(collection: Collection) -> None:
         [("session_status", ASCENDING), ("started_at", DESCENDING)],
         name="sessions_status_started_idx",
     )
-

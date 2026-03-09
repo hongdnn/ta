@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from . import (
     cluster,
+    cluster_weekly_stats,
     course,
     institution,
+    message,
     professor_course,
-    question,
     session,
     student_course,
     user,
@@ -20,6 +21,7 @@ MODEL_DEFS = [
     student_course,
     professor_course,
     session,
-    question,
+    message,
     cluster,
+    cluster_weekly_stats,
 ]

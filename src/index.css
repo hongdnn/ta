@@ -93,7 +93,18 @@
     animation: stepperFill 1.5s ease-in-out;
   }
 
+  .processing-progress {
+    width: 0%;
+    transform-origin: left;
+    animation: processingFill 4s linear forwards;
+  }
+
   @keyframes stepperFill {
+    from { width: 0%; }
+    to { width: 100%; }
+  }
+
+  @keyframes processingFill {
     from { width: 0%; }
     to { width: 100%; }
   }

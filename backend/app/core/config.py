@@ -26,6 +26,14 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
+def _env_float(name: str, default: float) -> float:
+    raw = _env(name, str(default))
+    try:
+        return float(raw)
+    except ValueError:
+        return default
+
+
 @dataclass(frozen=True)
 class Settings:
     app_name: str = "TA Backend"
@@ -37,6 +45,12 @@ class Settings:
     jwt_algorithm: str = _env("JWT_ALGORITHM", "HS256")
     jwt_exp_minutes: int = _env_int("JWT_EXP_MINUTES", 10080)  # 7 days
     mongo_init_on_startup: bool = _env("MONGO_INIT_ON_STARTUP", "0") == "1"
+    chroma_enabled: bool = _env("CHROMA_ENABLED", "0") == "1"
+    chroma_collection_name: str = _env("CHROMA_COLLECTION", "ta_course_clusters")
+    chroma_api_key: str = _env("CHROMA_API_KEY", "")
+    chroma_tenant: str = _env("CHROMA_TENANT", "")
+    chroma_database: str = _env("CHROMA_DATABASE", "")
+    chroma_similarity_threshold: float = 0.2
 
     @property
     def cors_origins(self) -> list[str]:

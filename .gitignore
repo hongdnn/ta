@@ -48,3 +48,5 @@ backend/*.json
 *.njsproj
 *.sln
 *.sw?
+
+.env
