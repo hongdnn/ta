@@ -2,19 +2,33 @@ import { TopQuestionsPanel, SessionEngagementPanel } from "./TopQuestionsPanel";
 import { AssignmentQuestionsPanel } from "./AssignmentQuestionsPanel";
 import { LessonImprovementsPanel } from "./LessonImprovementsPanel";
 import { StatsBar } from "./StatsBar";
+import { useState } from "react";
 
-export function DashboardPanels() {
+type Props = {
+  courseId: string;
+  rangeStartUtc: string;
+  rangeEndUtc: string;
+};
+
+export function DashboardPanels({ courseId, rangeStartUtc, rangeEndUtc }: Props) {
+  const [isAnalyticsLoading, setIsAnalyticsLoading] = useState(false);
+
   return (
     <div className="space-y-6">
-      <StatsBar />
+      <StatsBar isLoading={isAnalyticsLoading} />
       <div className="grid gap-6 lg:grid-cols-2">
-        <TopQuestionsPanel />
+        <TopQuestionsPanel
+          courseId={courseId}
+          rangeStartUtc={rangeStartUtc}
+          rangeEndUtc={rangeEndUtc}
+          onLoadingChange={setIsAnalyticsLoading}
+        />
         <div className="space-y-6">
-          <AssignmentQuestionsPanel />
-          <SessionEngagementPanel />
+          <AssignmentQuestionsPanel isLoading={isAnalyticsLoading} />
+          <SessionEngagementPanel isLoading={isAnalyticsLoading} />
         </div>
       </div>
-      <LessonImprovementsPanel />
+      <LessonImprovementsPanel isLoading={isAnalyticsLoading} />
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { improvementSuggestions } from "../data/mockDashboardData";
 import { Badge } from "@/components/ui/badge";
 import { Sparkles, ArrowUpCircle, ArrowRightCircle, ArrowDownCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const priorityConfig = {
   high: {
@@ -22,7 +23,7 @@ const priorityConfig = {
   },
 } as const;
 
-export function LessonImprovementsPanel() {
+export function LessonImprovementsPanel({ isLoading = false }: { isLoading?: boolean }) {
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -32,39 +33,60 @@ export function LessonImprovementsPanel() {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        {improvementSuggestions.map((s) => {
-          const config = priorityConfig[s.priority];
-          const Icon = config.icon;
-          return (
-            <div
-              key={s.id}
-              className={cn(
-                "rounded-lg border p-4 transition-colors",
-                config.className
-              )}
-            >
-              <div className="flex items-start gap-3">
-                <Icon className="h-5 w-5 mt-0.5 shrink-0" />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h4 className="font-medium text-sm text-foreground">
-                      {s.title}
-                    </h4>
-                    <Badge variant="outline" className="text-[10px] shrink-0">
-                      {config.label}
-                    </Badge>
+        {isLoading ? (
+          <>
+            {Array.from({ length: 3 }).map((_, idx) => (
+              <div key={idx} className="rounded-lg border p-4">
+                <div className="flex items-start gap-3">
+                  <Skeleton className="h-5 w-5 rounded-sm mt-0.5" />
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Skeleton className="h-4 w-48 rounded-md" />
+                      <Skeleton className="h-4 w-14 rounded-full" />
+                    </div>
+                    <Skeleton className="h-3 w-full rounded-md" />
+                    <Skeleton className="h-3 w-11/12 rounded-md" />
+                    <Skeleton className="h-3 w-40 rounded-md mt-2" />
                   </div>
-                  <p className="text-sm text-muted-foreground leading-relaxed">
-                    {s.description}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Source: {s.source}
-                  </p>
                 </div>
               </div>
-            </div>
-          );
-        })}
+            ))}
+          </>
+        ) : (
+          improvementSuggestions.map((s) => {
+            const config = priorityConfig[s.priority];
+            const Icon = config.icon;
+            return (
+              <div
+                key={s.id}
+                className={cn(
+                  "rounded-lg border p-4 transition-colors",
+                  config.className
+                )}
+              >
+                <div className="flex items-start gap-3">
+                  <Icon className="h-5 w-5 mt-0.5 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h4 className="font-medium text-sm text-foreground">
+                        {s.title}
+                      </h4>
+                      <Badge variant="outline" className="text-[10px] shrink-0">
+                        {config.label}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground leading-relaxed">
+                      {s.description}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Source: {s.source}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
       </CardContent>
     </Card>
   );

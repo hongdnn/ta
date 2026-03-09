@@ -10,8 +10,9 @@ import { Badge } from "@/components/ui/badge";
 import { ChevronRight, FileText, Lightbulb } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
 
-export function AssignmentQuestionsPanel() {
+export function AssignmentQuestionsPanel({ isLoading = false }: { isLoading?: boolean }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const maxQuestions = Math.max(...assignments.map((a) => a.totalQuestions));
 
@@ -24,15 +25,32 @@ export function AssignmentQuestionsPanel() {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-2">
-        {assignments.map((a) => (
-          <AssignmentRow
-            key={a.id}
-            assignment={a}
-            maxQuestions={maxQuestions}
-            isOpen={openId === a.id}
-            onToggle={() => setOpenId(openId === a.id ? null : a.id)}
-          />
-        ))}
+        {isLoading ? (
+          <>
+            {Array.from({ length: 3 }).map((_, idx) => (
+              <div key={idx} className="rounded-lg border border-border bg-card p-3">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-4 w-4 rounded-sm" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-4 w-28 rounded-md" />
+                    <Skeleton className="h-1.5 w-full rounded-md" />
+                  </div>
+                  <Skeleton className="h-6 w-24 rounded-full" />
+                </div>
+              </div>
+            ))}
+          </>
+        ) : (
+          assignments.map((a) => (
+            <AssignmentRow
+              key={a.id}
+              assignment={a}
+              maxQuestions={maxQuestions}
+              isOpen={openId === a.id}
+              onToggle={() => setOpenId(openId === a.id ? null : a.id)}
+            />
+          ))
+        )}
       </CardContent>
     </Card>
   );

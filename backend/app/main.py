@@ -6,6 +6,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.routes.assist import router as assist_router
+from app.routes.analytics import router as analytics_router
 from app.routes.auth import router as auth_router
 from app.routes.catalog import router as catalog_router
 from app.routes.session import router as session_router
@@ -17,8 +18,8 @@ app = FastAPI(title=settings.app_name, version=settings.app_version)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -27,6 +28,7 @@ app.include_router(auth_router)
 app.include_router(catalog_router)
 app.include_router(session_router)
 app.include_router(assist_router)
+app.include_router(analytics_router)
 
 
 @app.middleware("http")

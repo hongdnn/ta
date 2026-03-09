@@ -7,6 +7,7 @@ import {
   GraduationCap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuthStore } from "@web/stores/authStore";
 
 const navItems = [
   { to: "/overview", icon: LayoutDashboard, label: "Overview" },
@@ -16,6 +17,7 @@ const navItems = [
 
 export function DashboardLayout() {
   const navigate = useNavigate();
+  const clearAuth = useAuthStore((s) => s.clearAuth);
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -51,7 +53,10 @@ export function DashboardLayout() {
 
         <div className="px-3 pb-4">
           <button
-            onClick={() => navigate("/login")}
+            onClick={() => {
+              clearAuth();
+              navigate("/login", { replace: true });
+            }}
             className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors w-full"
           >
             <LogOut className="h-4 w-4 shrink-0" />

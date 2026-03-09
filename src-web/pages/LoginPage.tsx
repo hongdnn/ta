@@ -1,19 +1,46 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, Navigate, useLocation } from "react-router-dom";
 import { GraduationCap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useAuthStore } from "@web/stores/authStore";
+import { ApiClientError } from "@web/api/client";
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const login = useAuthStore((s) => s.login);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
-  const handleLogin = (e: React.FormEvent) => {
+  if (isAuthenticated) {
+    return <Navigate to="/overview" replace />;
+  }
+
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    // TODO: real auth logic
-    navigate("/overview");
+    setErrorMessage(null);
+    setIsSubmitting(true);
+    try {
+      await login({
+        email: email.trim(),
+        password,
+      });
+      const state = location.state as { from?: string } | null;
+      navigate(state?.from || "/overview", { replace: true });
+    } catch (error) {
+      if (error instanceof ApiClientError && error.status === 401) {
+        setErrorMessage("Invalid email or password.");
+      } else {
+        setErrorMessage("Login failed. Please try again.");
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -41,6 +68,7 @@ export default function LoginPage() {
               placeholder="professor@university.edu"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              disabled={isSubmitting}
             />
           </div>
           <div className="space-y-2">
@@ -51,12 +79,17 @@ export default function LoginPage() {
               placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              disabled={isSubmitting}
             />
           </div>
-          <Button type="submit" className="w-full">
-            Sign in
+          <Button type="submit" className="w-full" disabled={isSubmitting || !email.trim() || !password}>
+            {isSubmitting ? "Signing in..." : "Sign in"}
           </Button>
         </form>
+
+        {errorMessage && (
+          <p className="mt-3 text-sm text-destructive text-center">{errorMessage}</p>
+        )}
 
         <p className="text-center text-xs text-muted-foreground mt-6">
           Don't have an account?{" "}

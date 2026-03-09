@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
 import { DashboardLayout } from "./components/DashboardLayout";
+import { ProtectedRoute } from "@web/components/auth/ProtectedRoute";
 import LandingPage from "./pages/LandingPage";
 import LoginPage from "./pages/LoginPage";
 import DashboardHome from "./pages/DashboardHome";
@@ -20,7 +21,13 @@ export default function WebApp() {
           <Routes>
             <Route path="/" element={<LandingPage />} />
             <Route path="/login" element={<LoginPage />} />
-            <Route element={<DashboardLayout />}>
+            <Route
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout />
+                </ProtectedRoute>
+              }
+            >
               <Route path="/overview" element={<DashboardHome />} />
               <Route path="/documents" element={<DocumentsPage />} />
               <Route path="/profile" element={<ProfilePage />} />

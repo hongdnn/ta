@@ -17,11 +17,13 @@ export const pastQuestions = [
 ];
 
 export const sessionEngagement = [
-  { session: "Lecture 1", label: "Introduction", questions: 12 },
-  { session: "Lecture 2", label: "Recursion", questions: 34 },
-  { session: "Lecture 3", label: "Dynamic Programming", questions: 51 },
-  { session: "Lecture 4", label: "Greedy Algorithms", questions: 27 },
-  { session: "Lecture 5", label: "Graph Basics", questions: 18 },
+  { session: "Mon", label: "Monday", questions: 12 },
+  { session: "Tue", label: "Tuesday", questions: 34 },
+  { session: "Wed", label: "Wednesday", questions: 51 },
+  { session: "Thu", label: "Thursday", questions: 27 },
+  { session: "Fri", label: "Friday", questions: 18 },
+  { session: "Sat", label: "Saturday", questions: 9 },
+  { session: "Sun", label: "Sunday", questions: 14 },
 ];
 
 export interface AssignmentProblem {

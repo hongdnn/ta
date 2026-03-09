@@ -1,36 +1,57 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { ChevronLeft, ChevronRight, Search, Users, ChevronDown } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { DashboardPanels } from "../components/DashboardPanels";
-import { mockCourses, type Course } from "../data/mockCourses";
+import { fetchMyCourses, type CourseItem } from "@web/api/catalog";
 
 function getWeekRange(offset: number) {
   const now = new Date();
   const day = now.getDay();
   const monday = new Date(now);
   monday.setDate(now.getDate() - (day === 0 ? 6 : day - 1) + offset * 7);
+  monday.setHours(0, 0, 0, 0);
   const sunday = new Date(monday);
   sunday.setDate(monday.getDate() + 6);
+  const nextMonday = new Date(monday);
+  nextMonday.setDate(monday.getDate() + 7);
+  const endLocal = offset === 0 ? now : nextMonday;
   const fmt = (d: Date) =>
     d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   return {
+    startUtcIso: monday.toISOString(),
+    endUtcIso: endLocal.toISOString(),
     label: `${fmt(monday)} – ${fmt(sunday)}, ${sunday.getFullYear()}`,
   };
 }
 
 export default function DashboardHome() {
-  const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
+  const [selectedCourse, setSelectedCourse] = useState<CourseItem | null>(null);
   const [weekOffset, setWeekOffset] = useState(0);
   const [search, setSearch] = useState("");
+  const [courses, setCourses] = useState<CourseItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const week = getWeekRange(weekOffset);
 
-  const filtered = mockCourses.filter(
+  const filtered = useMemo(
+    () => courses.filter(
     (c) =>
       c.code.toLowerCase().includes(search.toLowerCase()) ||
-      c.name.toLowerCase().includes(search.toLowerCase())
+      c.title.toLowerCase().includes(search.toLowerCase())
+  ),
+    [courses, search]
   );
+
+  useEffect(() => {
+    setIsLoading(true);
+    setLoadError(null);
+    void fetchMyCourses()
+      .then((items) => setCourses(items))
+      .catch(() => setLoadError("Failed to load your courses."))
+      .finally(() => setIsLoading(false));
+  }, []);
 
   // Course selector view
   if (!selectedCourse) {
@@ -54,12 +75,18 @@ export default function DashboardHome() {
         </div>
 
         <div className="space-y-2">
-          {filtered.length === 0 && (
+          {isLoading && (
+            <p className="text-sm text-muted-foreground text-center py-8">Loading courses...</p>
+          )}
+          {!isLoading && loadError && (
+            <p className="text-sm text-destructive text-center py-8">{loadError}</p>
+          )}
+          {!isLoading && !loadError && filtered.length === 0 && (
             <p className="text-sm text-muted-foreground text-center py-8">
               No courses found
             </p>
           )}
-          {filtered.map((course) => (
+          {!isLoading && !loadError && filtered.map((course) => (
             <Card
               key={course.id}
               className="cursor-pointer transition-colors hover:bg-accent/50 group"
@@ -71,14 +98,7 @@ export default function DashboardHome() {
               <CardContent className="p-4 flex items-center justify-between">
                 <div className="space-y-0.5">
                   <p className="font-semibold text-sm text-foreground">{course.code}</p>
-                  <p className="text-sm text-muted-foreground">{course.name}</p>
-                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                    <span>{course.semester}</span>
-                    <span className="flex items-center gap-1">
-                      <Users className="h-3 w-3" />
-                      {course.students}
-                    </span>
-                  </div>
+                  <p className="text-sm text-muted-foreground">{course.title}</p>
                 </div>
                 <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors" />
               </CardContent>
@@ -104,7 +124,7 @@ export default function DashboardHome() {
           <h1 className="text-2xl font-bold tracking-tight text-foreground">
             {selectedCourse.code}
             <span className="font-normal text-muted-foreground text-lg ml-2">
-              {selectedCourse.name}
+              {selectedCourse.title}
             </span>
           </h1>
         </div>
@@ -128,7 +148,11 @@ export default function DashboardHome() {
 
       <p className="text-xs text-muted-foreground -mt-2">{week.label}</p>
 
-      <DashboardPanels />
+      <DashboardPanels
+        courseId={selectedCourse.id}
+        rangeStartUtc={week.startUtcIso}
+        rangeEndUtc={week.endUtcIso}
+      />
     </div>
   );
 }

@@ -61,3 +61,67 @@ class ClusterWeeklyStatsRepository:
             },
             upsert=True,
         )
+
+    def list_for_week(
+        self,
+        *,
+        course_id: ObjectId,
+        week_start: datetime,
+        limit: int,
+    ) -> list[dict]:
+        cursor = self.cluster_weekly_stats.find(
+            {"course_id": course_id, "week_start": week_start, "asks_this_week": {"$gt": 0}}
+        ).sort([("asks_this_week", -1), ("updated_at", -1)]).limit(limit)
+        return list(cursor)
+
+    def list_past_repeated_for_week(
+        self,
+        *,
+        course_id: ObjectId,
+        week_start: datetime,
+        limit: int,
+    ) -> list[dict]:
+        cursor = self.cluster_weekly_stats.find(
+            {
+                "course_id": course_id,
+                "week_start": week_start,
+                "asks_this_week": {"$gt": 0},
+                "asks_before_week": {"$gt": 0},
+            }
+        ).sort([("asks_total_until_now", -1), ("asks_this_week", -1), ("updated_at", -1)]).limit(limit)
+        return list(cursor)
+
+    def list_for_range(
+        self,
+        *,
+        course_id: ObjectId,
+        range_start_utc: datetime,
+        range_end_utc: datetime,
+        limit: int,
+    ) -> list[dict]:
+        cursor = self.cluster_weekly_stats.find(
+            {
+                "course_id": course_id,
+                "asks_this_week": {"$gt": 0},
+                "updated_at": {"$gte": range_start_utc, "$lt": range_end_utc},
+            }
+        ).sort([("asks_this_week", -1), ("updated_at", -1)]).limit(limit)
+        return list(cursor)
+
+    def list_past_repeated_for_range(
+        self,
+        *,
+        course_id: ObjectId,
+        range_start_utc: datetime,
+        range_end_utc: datetime,
+        limit: int,
+    ) -> list[dict]:
+        cursor = self.cluster_weekly_stats.find(
+            {
+                "course_id": course_id,
+                "asks_this_week": {"$gt": 0},
+                "asks_before_week": {"$gt": 0},
+                "updated_at": {"$gte": range_start_utc, "$lt": range_end_utc},
+            }
+        ).sort([("asks_total_until_now", -1), ("asks_this_week", -1), ("updated_at", -1)]).limit(limit)
+        return list(cursor)

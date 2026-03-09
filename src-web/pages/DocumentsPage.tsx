@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { FileText, Upload, Trash2, Plus, Search, Users, ChevronLeft, ChevronRight } from "lucide-react";
-import { mockCourses, type Course } from "../data/mockCourses";
+import { FileText, Upload, Trash2, Plus, Search, ChevronLeft, ChevronRight } from "lucide-react";
+import { fetchMyCourses, type CourseItem } from "@web/api/catalog";
 
 interface Document {
   id: string;
@@ -25,15 +25,30 @@ const mockDocsByCourse: Record<string, Document[]> = {
 };
 
 export default function DocumentsPage() {
-  const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
+  const [selectedCourse, setSelectedCourse] = useState<CourseItem | null>(null);
   const [search, setSearch] = useState("");
+  const [courses, setCourses] = useState<CourseItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [documents, setDocuments] = useState(mockDocsByCourse);
 
-  const filtered = mockCourses.filter(
+  const filtered = useMemo(
+    () => courses.filter(
     (c) =>
       c.code.toLowerCase().includes(search.toLowerCase()) ||
-      c.name.toLowerCase().includes(search.toLowerCase())
+      c.title.toLowerCase().includes(search.toLowerCase())
+  ),
+    [courses, search]
   );
+
+  useEffect(() => {
+    setIsLoading(true);
+    setLoadError(null);
+    void fetchMyCourses()
+      .then((items) => setCourses(items))
+      .catch(() => setLoadError("Failed to load your courses."))
+      .finally(() => setIsLoading(false));
+  }, []);
 
   const handleRemove = (id: string) => {
     if (!selectedCourse) return;
@@ -67,10 +82,16 @@ export default function DocumentsPage() {
         </div>
 
         <div className="space-y-2">
-          {filtered.length === 0 && (
+          {isLoading && (
+            <p className="text-sm text-muted-foreground text-center py-8">Loading courses...</p>
+          )}
+          {!isLoading && loadError && (
+            <p className="text-sm text-destructive text-center py-8">{loadError}</p>
+          )}
+          {!isLoading && !loadError && filtered.length === 0 && (
             <p className="text-sm text-muted-foreground text-center py-8">No courses found</p>
           )}
-          {filtered.map((course) => (
+          {!isLoading && !loadError && filtered.map((course) => (
             <Card
               key={course.id}
               className="cursor-pointer transition-colors hover:bg-accent/50 group"
@@ -79,14 +100,7 @@ export default function DocumentsPage() {
               <CardContent className="p-4 flex items-center justify-between">
                 <div className="space-y-0.5">
                   <p className="font-semibold text-sm text-foreground">{course.code}</p>
-                  <p className="text-sm text-muted-foreground">{course.name}</p>
-                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                    <span>{course.semester}</span>
-                    <span className="flex items-center gap-1">
-                      <Users className="h-3 w-3" />
-                      {course.students}
-                    </span>
-                  </div>
+                  <p className="text-sm text-muted-foreground">{course.title}</p>
                 </div>
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <span className="text-xs">{(documents[course.id] || []).length} files</span>
@@ -114,7 +128,7 @@ export default function DocumentsPage() {
           </button>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">
             {selectedCourse.code}
-            <span className="font-normal text-muted-foreground text-lg ml-2">Documents</span>
+            <span className="font-normal text-muted-foreground text-lg ml-2">{selectedCourse.title} Documents</span>
           </h1>
         </div>
         <Button size="sm" className="gap-2">

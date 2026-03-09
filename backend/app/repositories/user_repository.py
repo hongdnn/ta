@@ -18,6 +18,25 @@ class UserRepository:
     def get_by_email(self, email: str) -> dict[str, Any] | None:
         return self.users.find_one({"email": email.lower().strip()})
 
+    def get_by_id(self, user_id: str) -> dict[str, Any] | None:
+        if not ObjectId.is_valid(user_id):
+            return None
+        return self.users.find_one({"_id": ObjectId(user_id)})
+
+    def list_institution_ids(self, *, user_id: str, role: str | None = None) -> list[str]:
+        if not ObjectId.is_valid(user_id):
+            return []
+        query: dict[str, Any] = {"user_id": ObjectId(user_id)}
+        if role:
+            query["role"] = role
+        cursor = self.user_institutions.find(query, {"institution_id": 1})
+        ids: list[str] = []
+        for row in cursor:
+            institution_id = row.get("institution_id")
+            if isinstance(institution_id, ObjectId):
+                ids.append(str(institution_id))
+        return ids
+
     def create_user(
         self,
         *,

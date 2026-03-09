@@ -17,6 +17,7 @@ from app.repositories.session_repository import SessionRepository
 from app.repositories.user_repository import UserRepository
 from app.schemas.auth_context import AuthContext
 from app.services.assist_service import AssistService
+from app.services.analytics_service import AnalyticsService
 from app.services.auth_service import AuthService
 from app.services.catalog_service import CatalogService
 from app.services.session_service import SessionService
@@ -92,8 +93,9 @@ def get_auth_service(
 def get_catalog_service(
     institution_repo: InstitutionRepository = Depends(get_institution_repository),
     course_repo: CourseRepository = Depends(get_course_repository),
+    user_repo: UserRepository = Depends(get_user_repository),
 ) -> CatalogService:
-    return CatalogService(institution_repo=institution_repo, course_repo=course_repo)
+    return CatalogService(institution_repo=institution_repo, course_repo=course_repo, user_repo=user_repo)
 
 
 def get_assist_service(
@@ -116,3 +118,19 @@ def get_session_service(
     session_repo: SessionRepository = Depends(get_session_repository),
 ) -> SessionService:
     return SessionService(session_repo=session_repo)
+
+
+def get_analytics_service(
+    course_repo: CourseRepository = Depends(get_course_repository),
+    user_repo: UserRepository = Depends(get_user_repository),
+    cluster_repo: ClusterRepository = Depends(get_cluster_repository),
+    message_repo: MessageRepository = Depends(get_message_repository),
+    cluster_weekly_stats_repo: ClusterWeeklyStatsRepository = Depends(get_cluster_weekly_stats_repository),
+) -> AnalyticsService:
+    return AnalyticsService(
+        course_repo=course_repo,
+        user_repo=user_repo,
+        cluster_repo=cluster_repo,
+        message_repo=message_repo,
+        cluster_weekly_stats_repo=cluster_weekly_stats_repo,
+    )

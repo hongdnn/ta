@@ -27,3 +27,8 @@ class ClusterRepository:
             }
         )
         return result.inserted_id
+
+    def find_by_ids(self, ids: list[ObjectId]) -> list[dict]:
+        if not ids:
+            return []
+        return list(self.clusters.find({"_id": {"$in": ids}}))
