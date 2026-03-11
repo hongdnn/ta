@@ -11,7 +11,7 @@ class CourseQuestionsQuery(BaseModel):
     range_end_utc: str = Field(min_length=1)
     timezone: str = Field(default="UTC", min_length=1)
     limit_top: int = Field(default=5, ge=1, le=20)
-    limit_past: int = Field(default=10, ge=1, le=30)
+    limit_past: int = Field(default=5, ge=1, le=30)
 
 
 class TopQuestionItem(BaseModel):
@@ -28,6 +28,17 @@ class PastQuestionItem(BaseModel):
     asks_total_until_now: int
 
 
+class WeeklyImprovementItem(BaseModel):
+    cluster_id: str
+    question: str
+    asks_this_week: int
+    asks_before_week: int
+    asks_total_until_now: int
+    problem: str
+    title: str
+    solution: str
+
+
 class CourseQuestionsAnalyticsResponse(BaseModel):
     course_id: str
     timezone: str
@@ -35,3 +46,4 @@ class CourseQuestionsAnalyticsResponse(BaseModel):
     range_end_utc: str
     top_questions_this_week: list[TopQuestionItem]
     past_questions: list[PastQuestionItem]
+    weekly_improvements: list[WeeklyImprovementItem]

@@ -18,7 +18,7 @@ def get_course_questions(
     range_end_utc: str = Query(..., min_length=1),
     timezone: str = Query("UTC", min_length=1),
     limit_top: int = Query(5, ge=1, le=20),
-    limit_past: int = Query(10, ge=1, le=30),
+    limit_past: int = Query(5, ge=1, le=30),
     auth: AuthContext = Depends(get_auth_context),
     service: AnalyticsService = Depends(get_analytics_service),
 ):

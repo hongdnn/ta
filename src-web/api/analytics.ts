@@ -21,6 +21,16 @@ export type CourseQuestionsAnalyticsResponse = {
   range_end_utc: string;
   top_questions_this_week: TopQuestionItem[];
   past_questions: PastQuestionItem[];
+  weekly_improvements: Array<{
+    cluster_id: string;
+    question: string;
+    asks_this_week: number;
+    asks_before_week: number;
+    asks_total_until_now: number;
+    problem: string;
+    title: string;
+    solution: string;
+  }>;
 };
 
 export async function fetchCourseQuestionsAnalytics(

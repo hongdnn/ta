@@ -14,6 +14,7 @@ VALIDATOR = {
             "name": {"bsonType": "string"},
             "type": {"enum": ["university", "platform", "bootcamp", "training_center"]},
             "status": {"enum": ["active", "inactive"]},
+            "timezone": {"bsonType": ["string", "null"]},
             "created_at": {"bsonType": "date"},
             "updated_at": {"bsonType": "date"},
         },
@@ -24,4 +25,3 @@ VALIDATOR = {
 def apply_indexes(collection: Collection) -> None:
     collection.create_index([("name", ASCENDING)], name="institutions_name_idx")
     collection.create_index([("type", ASCENDING), ("status", ASCENDING)], name="institutions_type_status_idx")
-

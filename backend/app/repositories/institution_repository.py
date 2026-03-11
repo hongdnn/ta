@@ -16,6 +16,11 @@ class InstitutionRepository:
     def list_active(self) -> list[dict]:
         cursor = self.institutions.find(
             {"status": "active"},
-            {"name": 1, "type": 1},
+            {"name": 1, "type": 1, "timezone": 1},
         ).sort("name", 1)
         return list(cursor)
+
+    def get_by_id(self, institution_id: str) -> dict | None:
+        if not ObjectId.is_valid(institution_id):
+            return None
+        return self.institutions.find_one({"_id": ObjectId(institution_id)})

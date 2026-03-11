@@ -7,11 +7,13 @@ class InstitutionOption(BaseModel):
     id: str
     name: str
     type: str
+    timezone: str | None = None
 
 
 class CourseOption(BaseModel):
     id: str
     institution_id: str
+    institution_timezone: str | None = None
     code: str
     title: str
 

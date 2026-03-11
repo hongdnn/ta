@@ -11,6 +11,7 @@ from audioop import max as audio_max
 from audioop import rms as audio_rms
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from bson import ObjectId
 
@@ -18,6 +19,8 @@ from app.agents.assist_graph import run_assist
 from app.chroma.cluster_store import ChromaClusterStore
 from app.repositories.cluster_repository import ClusterRepository
 from app.repositories.cluster_weekly_stats_repository import ClusterWeeklyStatsRepository
+from app.repositories.course_repository import CourseRepository
+from app.repositories.institution_repository import InstitutionRepository
 from app.repositories.message_repository import MessageRepository
 from app.repositories.session_repository import SessionRepository
 from app.schemas.capture import CaptureResponse
@@ -51,8 +54,16 @@ def _normalize_content(text: str) -> str:
     return lowered
 
 
-def _week_start_utc(dt: datetime) -> datetime:
-    return datetime(dt.year, dt.month, dt.day, tzinfo=timezone.utc) - timedelta(days=dt.weekday())
+def _week_start_for_timezone_utc(dt: datetime, timezone_name: str | None) -> datetime:
+    tz_name = (timezone_name or "").strip() or "UTC"
+    try:
+        local_tz = ZoneInfo(tz_name)
+    except Exception:  # noqa: BLE001
+        local_tz = timezone.utc
+    local_dt = dt.astimezone(local_tz)
+    local_midnight = datetime(local_dt.year, local_dt.month, local_dt.day, tzinfo=local_tz)
+    local_week_start = local_midnight - timedelta(days=local_dt.weekday())
+    return local_week_start.astimezone(timezone.utc)
 
 
 class AssistService:
@@ -63,12 +74,16 @@ class AssistService:
         cluster_repo: ClusterRepository,
         cluster_weekly_stats_repo: ClusterWeeklyStatsRepository,
         session_repo: SessionRepository,
+        course_repo: CourseRepository,
+        institution_repo: InstitutionRepository,
         chroma_cluster_store: ChromaClusterStore,
     ):
         self.message_repo = message_repo
         self.cluster_repo = cluster_repo
         self.cluster_weekly_stats_repo = cluster_weekly_stats_repo
         self.session_repo = session_repo
+        self.course_repo = course_repo
+        self.institution_repo = institution_repo
         self.chroma_cluster_store = chroma_cluster_store
 
     async def process_capture(
@@ -216,6 +231,15 @@ class AssistService:
             if not isinstance(session_user_id, ObjectId) or session_user_id != user_oid:
                 print("[TA-BACKEND][persist] skipped: session does not belong to authenticated user", flush=True)
                 return
+            institution_timezone = "UTC"
+            course_doc = self.course_repo.get_by_id(str(course_id))
+            if course_doc is not None:
+                institution_id = course_doc.get("institution_id")
+                if isinstance(institution_id, ObjectId):
+                    institution_doc = self.institution_repo.get_by_id(str(institution_id))
+                    raw_timezone = institution_doc.get("timezone") if institution_doc else None
+                    if isinstance(raw_timezone, str) and raw_timezone.strip():
+                        institution_timezone = raw_timezone.strip()
 
             now = datetime.now(timezone.utc)
             normalized_user_text = _normalize_content(user_text)
@@ -296,7 +320,7 @@ class AssistService:
                         week_anchor = datetime.fromisoformat(captured_at.replace("Z", "+00:00")).astimezone(timezone.utc)
                     except Exception:  # noqa: BLE001
                         week_anchor = now
-                week_start = _week_start_utc(week_anchor)
+                week_start = _week_start_for_timezone_utc(week_anchor, institution_timezone)
 
                 self.cluster_weekly_stats_repo.increment_week_asks(
                     course_id=course_id,

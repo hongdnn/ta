@@ -2,16 +2,25 @@ import { TopQuestionsPanel, SessionEngagementPanel } from "./TopQuestionsPanel";
 import { AssignmentQuestionsPanel } from "./AssignmentQuestionsPanel";
 import { LessonImprovementsPanel } from "./LessonImprovementsPanel";
 import { StatsBar } from "./StatsBar";
-import { useState } from "react";
+import { useCallback, useState } from "react";
+import type { CourseQuestionsAnalyticsResponse } from "@web/api/analytics";
 
 type Props = {
   courseId: string;
   rangeStartUtc: string;
   rangeEndUtc: string;
+  timezone: string;
 };
 
-export function DashboardPanels({ courseId, rangeStartUtc, rangeEndUtc }: Props) {
+export function DashboardPanels({ courseId, rangeStartUtc, rangeEndUtc, timezone }: Props) {
   const [isAnalyticsLoading, setIsAnalyticsLoading] = useState(false);
+  const [improvements, setImprovements] = useState<CourseQuestionsAnalyticsResponse["weekly_improvements"]>([]);
+  const handleLoadingChange = useCallback((loading: boolean) => {
+    setIsAnalyticsLoading(loading);
+  }, []);
+  const handleAnalyticsData = useCallback((data: CourseQuestionsAnalyticsResponse) => {
+    setImprovements(data.weekly_improvements ?? []);
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -21,14 +30,19 @@ export function DashboardPanels({ courseId, rangeStartUtc, rangeEndUtc }: Props)
           courseId={courseId}
           rangeStartUtc={rangeStartUtc}
           rangeEndUtc={rangeEndUtc}
-          onLoadingChange={setIsAnalyticsLoading}
+          timezone={timezone}
+          onLoadingChange={handleLoadingChange}
+          onAnalyticsData={handleAnalyticsData}
         />
         <div className="space-y-6">
           <AssignmentQuestionsPanel isLoading={isAnalyticsLoading} />
           <SessionEngagementPanel isLoading={isAnalyticsLoading} />
         </div>
       </div>
-      <LessonImprovementsPanel isLoading={isAnalyticsLoading} />
+      <LessonImprovementsPanel
+        isLoading={isAnalyticsLoading}
+        improvements={improvements}
+      />
     </div>
   );
 }

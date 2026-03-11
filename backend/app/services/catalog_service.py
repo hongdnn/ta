@@ -26,6 +26,7 @@ class CatalogService:
                     id=str(item["_id"]),
                     name=item["name"],
                     type=item["type"],
+                    timezone=item.get("timezone"),
                 )
                 for item in raw_items
             ]
@@ -38,6 +39,7 @@ class CatalogService:
                 CourseOption(
                     id=str(item["_id"]),
                     institution_id=str(item["institution_id"]),
+                    institution_timezone=item.get("institution_timezone"),
                     code=item["code"],
                     title=item["title"],
                 )
@@ -53,6 +55,7 @@ class CatalogService:
                 CourseOption(
                     id=str(item["_id"]),
                     institution_id=str(item["institution_id"]),
+                    institution_timezone=item.get("institution_timezone"),
                     code=item["code"],
                     title=item["title"],
                 )

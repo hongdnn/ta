@@ -1,26 +1,34 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Any
 
 from bson import ObjectId
 from fastapi import HTTPException
 
+from app.agents.improvement_tutor import generate_weekly_improvements
 from app.repositories.cluster_repository import ClusterRepository
 from app.repositories.cluster_weekly_stats_repository import ClusterWeeklyStatsRepository
 from app.repositories.course_repository import CourseRepository
 from app.repositories.message_repository import MessageRepository
 from app.repositories.user_repository import UserRepository
+from app.repositories.weekly_improvements_repository import WeeklyImprovementsRepository
 from app.schemas.analytics import (
     CourseQuestionsAnalyticsResponse,
     CourseQuestionsQuery,
     PastQuestionItem,
     TopQuestionItem,
+    WeeklyImprovementItem,
 )
 
 
 def _parse_utc_iso(value: str) -> datetime:
     parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     return parsed.astimezone(timezone.utc)
+
+
+def _canonical_week_start(range_start_utc: datetime) -> datetime:
+    return range_start_utc
 
 
 class AnalyticsService:
@@ -32,12 +40,55 @@ class AnalyticsService:
         cluster_repo: ClusterRepository,
         message_repo: MessageRepository,
         cluster_weekly_stats_repo: ClusterWeeklyStatsRepository,
+        weekly_improvements_repo: WeeklyImprovementsRepository,
     ):
         self.course_repo = course_repo
         self.user_repo = user_repo
         self.cluster_repo = cluster_repo
         self.message_repo = message_repo
         self.cluster_weekly_stats_repo = cluster_weekly_stats_repo
+        self.weekly_improvements_repo = weekly_improvements_repo
+
+    def _build_improvement_candidates(
+        self,
+        *,
+        top_items: list[TopQuestionItem],
+        past_items: list[PastQuestionItem],
+    ) -> list[dict[str, Any]]:
+        merged: dict[str, dict[str, Any]] = {}
+        for item in top_items[:5]:
+            cid = item.cluster_id
+            merged[cid] = {
+                "cluster_id": cid,
+                "question": item.question,
+                "asks_this_week": int(item.asks_this_week),
+                "asks_before_week": 0,
+                "asks_total_until_now": int(item.asks_this_week),
+            }
+        for item in past_items[:5]:
+            cid = item.cluster_id
+            current = merged.get(cid)
+            if current is None:
+                merged[cid] = {
+                    "cluster_id": cid,
+                    "question": item.question,
+                    "asks_this_week": int(item.asks_this_week),
+                    "asks_before_week": int(item.asks_before_week),
+                    "asks_total_until_now": int(item.asks_total_until_now),
+                }
+                continue
+            current["asks_this_week"] = max(current["asks_this_week"], int(item.asks_this_week))
+            current["asks_before_week"] = max(current["asks_before_week"], int(item.asks_before_week))
+            current["asks_total_until_now"] = max(current["asks_total_until_now"], int(item.asks_total_until_now))
+            if not current.get("question"):
+                current["question"] = item.question
+
+        items = list(merged.values())
+        items.sort(
+            key=lambda x: (int(x.get("asks_total_until_now", 0)), int(x.get("asks_this_week", 0))),
+            reverse=True,
+        )
+        return items[:5]
 
     def get_course_questions_analytics(
         self,
@@ -118,6 +169,62 @@ class AnalyticsService:
             for row in past_rows
         ]
 
+        candidates = self._build_improvement_candidates(top_items=top_items, past_items=past_items)
+        improvements_payload: list[dict[str, Any]] = []
+        if candidates:
+            improvement_week_start = _canonical_week_start(range_start_utc)
+            fingerprint = [str(item["cluster_id"]) for item in candidates]
+            weekly_doc = self.weekly_improvements_repo.get_for_range(
+                course_id=course_oid,
+                week_start=improvement_week_start,
+            )
+            stored_improvements = (weekly_doc or {}).get("improvements", []) or []
+            has_missing_fields = any(
+                not str(item.get("problem", "")).strip()
+                or not str(item.get("title", "")).strip()
+                or not str(item.get("solution", "")).strip()
+                for item in stored_improvements
+                if isinstance(item, dict)
+            )
+            can_reuse = bool(
+                weekly_doc
+                and weekly_doc.get("question_fingerprint") == fingerprint
+                and not has_missing_fields
+            )
+
+            if can_reuse:
+                improvements_payload = stored_improvements
+            else:
+                try:
+                    improvements_payload, _ = generate_weekly_improvements(candidates)
+                    now = datetime.now(timezone.utc)
+                    self.weekly_improvements_repo.upsert_for_range(
+                        course_id=course_oid,
+                        week_start=improvement_week_start,
+                        question_fingerprint=fingerprint,
+                        improvements=improvements_payload,
+                        now=now,
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    print(f"[TA-BACKEND][improvements] generation failed: {exc}", flush=True)
+                    if weekly_doc:
+                        improvements_payload = weekly_doc.get("improvements", []) or []
+
+        weekly_improvements = [
+            WeeklyImprovementItem(
+                cluster_id=str(item.get("cluster_id", "")),
+                question=str(item.get("question", "")),
+                asks_this_week=int(item.get("asks_this_week", 0)),
+                asks_before_week=int(item.get("asks_before_week", 0)),
+                asks_total_until_now=int(item.get("asks_total_until_now", 0)),
+                problem=str(item.get("problem", "")),
+                title=str(item.get("title", "")),
+                solution=str(item.get("solution", "")),
+            )
+            for item in improvements_payload
+            if str(item.get("cluster_id", "")).strip()
+        ]
+
         return CourseQuestionsAnalyticsResponse(
             course_id=payload.course_id,
             timezone=payload.timezone,
@@ -125,4 +232,5 @@ class AnalyticsService:
             range_end_utc=range_end_utc.isoformat(),
             top_questions_this_week=top_items,
             past_questions=past_items,
+            weekly_improvements=weekly_improvements,
         )

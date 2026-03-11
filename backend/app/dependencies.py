@@ -15,6 +15,7 @@ from app.repositories.institution_repository import InstitutionRepository
 from app.repositories.message_repository import MessageRepository
 from app.repositories.session_repository import SessionRepository
 from app.repositories.user_repository import UserRepository
+from app.repositories.weekly_improvements_repository import WeeklyImprovementsRepository
 from app.schemas.auth_context import AuthContext
 from app.services.assist_service import AssistService
 from app.services.analytics_service import AnalyticsService
@@ -76,6 +77,10 @@ def get_session_repository() -> SessionRepository:
     return SessionRepository(get_db())
 
 
+def get_weekly_improvements_repository() -> WeeklyImprovementsRepository:
+    return WeeklyImprovementsRepository(get_db())
+
+
 def get_chroma_cluster_store() -> ChromaClusterStore:
     return ChromaClusterStore(
         get_chroma_collection(),
@@ -103,6 +108,8 @@ def get_assist_service(
     cluster_repo: ClusterRepository = Depends(get_cluster_repository),
     cluster_weekly_stats_repo: ClusterWeeklyStatsRepository = Depends(get_cluster_weekly_stats_repository),
     session_repo: SessionRepository = Depends(get_session_repository),
+    course_repo: CourseRepository = Depends(get_course_repository),
+    institution_repo: InstitutionRepository = Depends(get_institution_repository),
     chroma_cluster_store: ChromaClusterStore = Depends(get_chroma_cluster_store),
 ) -> AssistService:
     return AssistService(
@@ -110,6 +117,8 @@ def get_assist_service(
         cluster_repo=cluster_repo,
         cluster_weekly_stats_repo=cluster_weekly_stats_repo,
         session_repo=session_repo,
+        course_repo=course_repo,
+        institution_repo=institution_repo,
         chroma_cluster_store=chroma_cluster_store,
     )
 
@@ -126,6 +135,7 @@ def get_analytics_service(
     cluster_repo: ClusterRepository = Depends(get_cluster_repository),
     message_repo: MessageRepository = Depends(get_message_repository),
     cluster_weekly_stats_repo: ClusterWeeklyStatsRepository = Depends(get_cluster_weekly_stats_repository),
+    weekly_improvements_repo: WeeklyImprovementsRepository = Depends(get_weekly_improvements_repository),
 ) -> AnalyticsService:
     return AnalyticsService(
         course_repo=course_repo,
@@ -133,4 +143,5 @@ def get_analytics_service(
         cluster_repo=cluster_repo,
         message_repo=message_repo,
         cluster_weekly_stats_repo=cluster_weekly_stats_repo,
+        weekly_improvements_repo=weekly_improvements_repo,
     )

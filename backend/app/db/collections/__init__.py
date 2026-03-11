@@ -11,6 +11,7 @@ from . import (
     student_course,
     user,
     user_institution,
+    weekly_improvements,
 )
 
 MODEL_DEFS = [
@@ -24,4 +25,5 @@ MODEL_DEFS = [
     message,
     cluster,
     cluster_weekly_stats,
+    weekly_improvements,
 ]

@@ -9,10 +9,11 @@ import {
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import { MessageCircleQuestion, History } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   fetchCourseQuestionsAnalytics,
+  type CourseQuestionsAnalyticsResponse,
 } from "@web/api/analytics";
 
 const chartConfig: ChartConfig = {
@@ -23,19 +24,23 @@ type Props = {
   courseId: string;
   rangeStartUtc: string;
   rangeEndUtc: string;
+  timezone: string;
   onLoadingChange?: (loading: boolean) => void;
+  onAnalyticsData?: (data: CourseQuestionsAnalyticsResponse) => void;
 };
 
-export function TopQuestionsPanel({ courseId, rangeStartUtc, rangeEndUtc, onLoadingChange }: Props) {
+export function TopQuestionsPanel({
+  courseId,
+  rangeStartUtc,
+  rangeEndUtc,
+  timezone,
+  onLoadingChange,
+  onAnalyticsData,
+}: Props) {
   const [topQuestions, setTopQuestions] = useState<Array<{ rank: number; question: string; count: number }>>([]);
   const [pastQuestions, setPastQuestions] = useState<Array<{ rank: number; question: string; count: number }>>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-
-  const timezone = useMemo(
-    () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
-    []
-  );
 
   const loadAnalytics = useCallback(() => {
     setIsLoading(true);
@@ -44,6 +49,7 @@ export function TopQuestionsPanel({ courseId, rangeStartUtc, rangeEndUtc, onLoad
 
     void fetchCourseQuestionsAnalytics(courseId, rangeStartUtc, rangeEndUtc, timezone)
       .then((data) => {
+        onAnalyticsData?.(data);
         setTopQuestions(
           (data.top_questions_this_week ?? []).map((item, idx) => ({
             rank: idx + 1,
@@ -68,7 +74,7 @@ export function TopQuestionsPanel({ courseId, rangeStartUtc, rangeEndUtc, onLoad
         setIsLoading(false);
         onLoadingChange?.(false);
       });
-  }, [courseId, rangeStartUtc, rangeEndUtc, timezone, onLoadingChange]);
+  }, [courseId, rangeStartUtc, rangeEndUtc, timezone, onLoadingChange, onAnalyticsData]);
 
   useEffect(() => {
     loadAnalytics();
@@ -182,9 +188,7 @@ export function SessionEngagementPanel({ isLoading = false }: { isLoading?: bool
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-lg">Weekly Question Activity</CardTitle>
-        <p className="text-sm text-muted-foreground">
-          Questions asked from Monday to Sunday
-        </p>
+        <p className="text-sm text-muted-foreground">Daily question volume across the current week</p>
       </CardHeader>
       <CardContent>
         {isLoading ? (

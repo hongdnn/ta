@@ -6,34 +6,113 @@ import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { DashboardPanels } from "../components/DashboardPanels";
 import { fetchMyCourses, type CourseItem } from "@web/api/catalog";
 
-function getWeekRange(offset: number) {
-  const now = new Date();
-  const day = now.getDay();
-  const monday = new Date(now);
-  monday.setDate(now.getDate() - (day === 0 ? 6 : day - 1) + offset * 7);
-  monday.setHours(0, 0, 0, 0);
-  const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
-  const nextMonday = new Date(monday);
-  nextMonday.setDate(monday.getDate() + 7);
+type LocalDateParts = {
+  year: number;
+  month: number;
+  day: number;
+  weekday: number;
+};
+
+function getTimeZoneOffsetMinutes(date: Date, timeZone: string) {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    timeZoneName: "shortOffset",
+    hour: "2-digit",
+  });
+  const zonePart = formatter.formatToParts(date).find((part) => part.type === "timeZoneName")?.value ?? "GMT";
+  const match = zonePart.match(/^GMT([+-])(\d{1,2})(?::?(\d{2}))?$/);
+  if (!match) return 0;
+  const sign = match[1] === "-" ? -1 : 1;
+  const hours = Number(match[2]);
+  const minutes = Number(match[3] ?? "0");
+  return sign * (hours * 60 + minutes);
+}
+
+function getLocalDateParts(date: Date, timeZone: string): LocalDateParts {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    weekday: "short",
+  });
+  const parts = Object.fromEntries(formatter.formatToParts(date).map((part) => [part.type, part.value]));
+  const weekdayMap: Record<string, number> = {
+    Mon: 0,
+    Tue: 1,
+    Wed: 2,
+    Thu: 3,
+    Fri: 4,
+    Sat: 5,
+    Sun: 6,
+  };
+  return {
+    year: Number(parts.year),
+    month: Number(parts.month),
+    day: Number(parts.day),
+    weekday: weekdayMap[parts.weekday] ?? 0,
+  };
+}
+
+function addDays(parts: { year: number; month: number; day: number }, days: number) {
+  const date = new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
+  date.setUTCDate(date.getUTCDate() + days);
+  return {
+    year: date.getUTCFullYear(),
+    month: date.getUTCMonth() + 1,
+    day: date.getUTCDate(),
+  };
+}
+
+function zonedLocalDateTimeToUtc(
+  parts: { year: number; month: number; day: number },
+  timeZone: string,
+  hours = 0,
+  minutes = 0,
+  seconds = 0,
+  ms = 0
+) {
+  let utcMs = Date.UTC(parts.year, parts.month - 1, parts.day, hours, minutes, seconds, ms);
+  for (let i = 0; i < 3; i += 1) {
+    const offsetMinutes = getTimeZoneOffsetMinutes(new Date(utcMs), timeZone);
+    const nextUtcMs = Date.UTC(parts.year, parts.month - 1, parts.day, hours, minutes, seconds, ms) - offsetMinutes * 60_000;
+    if (nextUtcMs === utcMs) break;
+    utcMs = nextUtcMs;
+  }
+  return new Date(utcMs);
+}
+
+function getWeekRange(offset: number, baseNow: Date, timeZone: string) {
+  const now = baseNow;
+  const localParts = getLocalDateParts(now, timeZone);
+  const mondayLocalParts = addDays(localParts, -localParts.weekday + offset * 7);
+  const sundayLocalParts = addDays(mondayLocalParts, 6);
+  const nextMondayLocalParts = addDays(mondayLocalParts, 7);
+  const monday = zonedLocalDateTimeToUtc(mondayLocalParts, timeZone);
+  const nextMonday = zonedLocalDateTimeToUtc(nextMondayLocalParts, timeZone);
   const endLocal = offset === 0 ? now : nextMonday;
   const fmt = (d: Date) =>
-    d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone });
   return {
     startUtcIso: monday.toISOString(),
     endUtcIso: endLocal.toISOString(),
-    label: `${fmt(monday)} – ${fmt(sunday)}, ${sunday.getFullYear()}`,
+    label: `${fmt(monday)} – ${fmt(zonedLocalDateTimeToUtc(sundayLocalParts, timeZone))}, ${sundayLocalParts.year}`,
   };
 }
 
 export default function DashboardHome() {
   const [selectedCourse, setSelectedCourse] = useState<CourseItem | null>(null);
   const [weekOffset, setWeekOffset] = useState(0);
+  const [weekAnchor, setWeekAnchor] = useState(() => new Date());
   const [search, setSearch] = useState("");
   const [courses, setCourses] = useState<CourseItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const week = getWeekRange(weekOffset);
+  const analyticsTimezone = selectedCourse?.institution_timezone || "UTC";
+  const week = useMemo(
+    () => getWeekRange(weekOffset, weekAnchor, analyticsTimezone),
+    [weekOffset, weekAnchor, analyticsTimezone]
+  );
 
   const filtered = useMemo(
     () => courses.filter(
@@ -93,6 +172,7 @@ export default function DashboardHome() {
               onClick={() => {
                 setSelectedCourse(course);
                 setWeekOffset(0);
+                setWeekAnchor(new Date());
               }}
             >
               <CardContent className="p-4 flex items-center justify-between">
@@ -131,16 +211,36 @@ export default function DashboardHome() {
 
         {/* Week navigator */}
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setWeekOffset((o) => o - 1)}>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => {
+              setWeekOffset((o) => o - 1);
+              setWeekAnchor(new Date());
+            }}
+          >
             <ChevronLeft className="h-4 w-4" />
           </Button>
           <button
-            onClick={() => setWeekOffset(0)}
+            onClick={() => {
+              setWeekOffset(0);
+              setWeekAnchor(new Date());
+            }}
             className="text-sm font-medium text-foreground hover:text-primary transition-colors px-2 min-w-[180px] text-center"
           >
             {weekOffset === 0 ? "This week" : week.label}
           </button>
-          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setWeekOffset((o) => o + 1)} disabled={weekOffset >= 0}>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => {
+              setWeekOffset((o) => o + 1);
+              setWeekAnchor(new Date());
+            }}
+            disabled={weekOffset >= 0}
+          >
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
@@ -152,6 +252,7 @@ export default function DashboardHome() {
         courseId={selectedCourse.id}
         rangeStartUtc={week.startUtcIso}
         rangeEndUtc={week.endUtcIso}
+        timezone={analyticsTimezone}
       />
     </div>
   );

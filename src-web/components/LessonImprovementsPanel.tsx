@@ -1,5 +1,4 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { improvementSuggestions } from "../data/mockDashboardData";
 import { Badge } from "@/components/ui/badge";
 import { Sparkles, ArrowUpCircle, ArrowRightCircle, ArrowDownCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -23,7 +22,47 @@ const priorityConfig = {
   },
 } as const;
 
-export function LessonImprovementsPanel({ isLoading = false }: { isLoading?: boolean }) {
+type ImprovementItem = {
+  cluster_id: string;
+  question: string;
+  asks_this_week: number;
+  asks_before_week: number;
+  asks_total_until_now: number;
+  problem: string;
+  title: string;
+  solution: string;
+};
+
+function getPriorityByIndex(index: number, total: number): "high" | "medium" | "low" {
+  if (total >= 5) {
+    if (index <= 1) return "high";
+    if (index <= 3) return "medium";
+    return "low";
+  }
+  if (total === 4) {
+    if (index <= 1) return "high";
+    if (index === 2) return "medium";
+    return "low";
+  }
+  if (total === 3) {
+    if (index === 0) return "high";
+    if (index === 1) return "medium";
+    return "low";
+  }
+  if (total === 2) {
+    if (index === 0) return "medium";
+    return "low";
+  }
+  return "low";
+}
+
+export function LessonImprovementsPanel({
+  isLoading = false,
+  improvements = [],
+}: {
+  isLoading?: boolean;
+  improvements?: ImprovementItem[];
+}) {
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -52,13 +91,16 @@ export function LessonImprovementsPanel({ isLoading = false }: { isLoading?: boo
               </div>
             ))}
           </>
+        ) : improvements.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No suggested improvements for this range yet.</p>
         ) : (
-          improvementSuggestions.map((s) => {
-            const config = priorityConfig[s.priority];
+          improvements.map((s, index) => {
+            const priority = getPriorityByIndex(index, improvements.length);
+            const config = priorityConfig[priority];
             const Icon = config.icon;
             return (
               <div
-                key={s.id}
+                key={s.cluster_id}
                 className={cn(
                   "rounded-lg border p-4 transition-colors",
                   config.className
@@ -76,10 +118,7 @@ export function LessonImprovementsPanel({ isLoading = false }: { isLoading?: boo
                       </Badge>
                     </div>
                     <p className="text-sm text-muted-foreground leading-relaxed">
-                      {s.description}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-2">
-                      Source: {s.source}
+                      {[s.problem, s.solution].filter(Boolean).join(" ").trim()}
                     </p>
                   </div>
                 </div>
