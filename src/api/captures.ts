@@ -9,7 +9,6 @@ export type CaptureApiResponse = {
   route?: string;
   transcript?: string;
   frame_analysis?: string;
-  context_summary?: string;
 };
 
 export type CaptureUploadPayload = {

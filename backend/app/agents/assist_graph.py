@@ -14,7 +14,6 @@ from .vision_llm import describe_frame_with_gemini
 
 
 class SessionState(TypedDict):
-    last_context_summary: str
     history: list[dict[str, str]]
     updated_at: float
 
@@ -30,13 +29,9 @@ class AssistState(TypedDict, total=False):
     frame_bytes: bytes | None
     transcript: str
     frame_analysis: str
-    context_summary: str
+    frame_activity_type: str
     intent: str
     route: str
-    should_run_context: bool
-    answer_goal: str
-    router_reason: str
-    wants_context_reference: bool
     answer: str
     language: str | None
     duration_seconds: float | None
@@ -89,10 +84,6 @@ def classify_intent_node(state: AssistState) -> AssistState:
         result = {
             "intent": "context_only",
             "route": "context_only",
-            "should_run_context": True,
-            "answer_goal": "Explain the captured lesson moment clearly for the student.",
-            "router_reason": "No user text provided; treat as capture-driven context explanation.",
-            "wants_context_reference": True,
         }
         print(
             f"[TA-ASSIST][classify] session={state.get('session_id')} user_text=(empty) "
@@ -105,23 +96,22 @@ def classify_intent_node(state: AssistState) -> AssistState:
     client = _get_vertex_client()
     prompt = (
         "You are a routing agent for a teaching assistant.\n"
-        "Understand what the user actually wants and return JSON only.\n"
-        "Do not use markdown.\n"
-        "Schema:\n"
+        "Decide whether the user's request needs the current captured screen/audio context.\n"
+        "Return JSON only. Do not use markdown.\n"
+        "Return exactly this schema:\n"
         "{\n"
-        '  "intent": "context_only|theory_only|context_plus_theory",\n'
-        '  "should_run_context": true|false,\n'
-        '  "wants_context_reference": true|false,\n'
-        '  "answer_goal": "one sentence describing what final answer must do",\n'
-        '  "router_reason": "short reason"\n'
-        "}\n"
-        "Use wants_context_reference=true if user asks about this case/this lesson/what is on screen/current explanation.\n"
-        "Treat short generic follow-up commands as context-referential by default in an active session.\n"
-        "If the user message is brief and does not name a standalone theory topic, classify as context_only.\n"
-        "Examples: explain this, explain deeper, explain simpler, summarize, what should I focus on, give me a hint.\n"
-        "For these follow-ups, set intent=context_only and should_run_context=true.\n"
-        "Use should_run_context=true when context is needed or capture was triggered.\n"
-        "If user asks pure theory not tied to current context, should_run_context=false.\n\n"
+        '  "intent": "context_only|theory_only|context_plus_theory"\n'
+        "}\n\n"
+        "Intent definitions:\n"
+        "- context_only: The user is asking about the current screen, current explanation, visible work, transcript, or a short follow-up that depends on current/prior context.\n"
+        "- theory_only: The user is asking a standalone concept question that can be answered without current screen/audio context.\n"
+        "- context_plus_theory: The user is asking a concept question and also referencing the current context.\n\n"
+        "Rules:\n"
+        "1) If user_text is empty, choose context_only.\n"
+        "2) If the user message is brief and does not name a standalone theory topic, choose context_only.\n"
+        "3) Short follow-up commands usually need context. Examples: explain this, explain deeper, explain simpler, summarize, what should I focus on, give me a hint.\n"
+        "4) If the user asks a standalone definition or general concept question, choose theory_only.\n"
+        "5) If the user asks a concept question and also references the current context, choose context_plus_theory.\n\n"
         f"capture_triggered={capture_triggered}\n"
         f"user_text={user_text}"
     )
@@ -144,37 +134,13 @@ def classify_intent_node(state: AssistState) -> AssistState:
     if label not in {"context_only", "theory_only", "context_plus_theory"}:
         label = "context_only" if capture_triggered else "theory_only"
 
-    wants_context_reference = bool(payload.get("wants_context_reference", False))
-    if capture_triggered:
-        wants_context_reference = True
-
-    should_run_context = bool(payload.get("should_run_context", False))
-    if capture_triggered or label in {"context_only", "context_plus_theory"}:
-        should_run_context = True
-
-    answer_goal = str(payload.get("answer_goal", "")).strip()
-    if not answer_goal:
-        answer_goal = "Answer the user clearly and in a teaching-assistant style."
-
-    router_reason = str(payload.get("router_reason", "")).strip()
-    if not router_reason:
-        router_reason = "Fallback routing applied."
-
     result = {
         "intent": label,
         "route": label,
-        "should_run_context": should_run_context,
-        "answer_goal": answer_goal,
-        "router_reason": router_reason,
-        "wants_context_reference": wants_context_reference,
     }
     print(
         f"[TA-ASSIST][classify] session={state.get('session_id')} capture_triggered={capture_triggered} "
-        f"intent={label} should_run_context={should_run_context} wants_context_reference={wants_context_reference}",
-        flush=True,
-    )
-    print(
-        f"[TA-ASSIST][classify] goal={answer_goal} reason={router_reason}",
+        f"intent={label}",
         flush=True,
     )
     return result
@@ -183,6 +149,7 @@ def classify_intent_node(state: AssistState) -> AssistState:
 def context_node(state: AssistState) -> AssistState:
     transcript = ""
     frame_analysis = ""
+    frame_activity_type = "lecture"
     language = None
     duration_seconds = None
 
@@ -203,31 +170,22 @@ def context_node(state: AssistState) -> AssistState:
 
     if frame_bytes:
         try:
-            frame_analysis = describe_frame_with_gemini(frame_bytes, "")
+            frame_activity_type, frame_analysis = describe_frame_with_gemini(frame_bytes, state.get("user_text") or "")
             print(
-                f"[TA-ASSIST][context] Frame analysis done len={len(frame_analysis)}",
+                f"[TA-ASSIST][context] Frame analysis done activity_type={frame_activity_type} len={len(frame_analysis)}",
                 flush=True,
             )
         except Exception:
             frame_analysis = ""
+            frame_activity_type = "lecture"
             print("[TA-ASSIST][context] Frame analysis failed -> empty", flush=True)
 
     print("[TA-ASSIST][context] OCR skipped (disabled in current flow)", flush=True)
 
-    if transcript or frame_analysis:
-        context_summary = (
-            "Current captured lesson context:\n"
-            f"- Transcript: {transcript or '(empty)'}\n"
-            f"- Visual analysis: {frame_analysis or '(empty)'}"
-        )
-    else:
-        session = SESSION_MEMORY.get(state["session_id"])
-        context_summary = session["last_context_summary"] if session else ""
-
     return {
         "transcript": transcript,
         "frame_analysis": frame_analysis,
-        "context_summary": context_summary,
+        "frame_activity_type": frame_activity_type,
         "language": language,
         "duration_seconds": duration_seconds,
     }
@@ -238,37 +196,30 @@ def tutor_node(state: AssistState) -> AssistState:
     tutor_max_output_tokens = int(os.getenv("TUTOR_MAX_OUTPUT_TOKENS", "2400").strip())
     client = _get_vertex_client()
 
-    session = SESSION_MEMORY.get(state["session_id"], {"history": [], "last_context_summary": "", "updated_at": 0.0})
+    session = SESSION_MEMORY.get(state["session_id"], {"history": [], "updated_at": 0.0})
     history = session.get("history", [])[-4:]
     history_text = "\n".join([f"Q: {h['q']}\nA: {h['a']}" for h in history]) or "(none)"
 
     user_text = (state.get("user_text") or "").strip()
     transcript = (state.get("transcript") or "").strip()
     frame_analysis = (state.get("frame_analysis") or "").strip()
-    router_reason = (state.get("router_reason") or "").strip()
-    answer_goal = (state.get("answer_goal") or "").strip()
-    wants_context_reference = bool(state.get("wants_context_reference"))
+    intent = (state.get("intent") or "").strip()
+    frame_activity_type = (state.get("frame_activity_type") or "lecture").strip().lower()
+    if frame_activity_type not in {"lecture", "assignment"}:
+        frame_activity_type = "lecture"
 
     transcript_useful = _is_useful_signal(transcript, min_words=18)
     frame_useful = _is_useful_signal(frame_analysis, min_words=30)
 
-    context_parts: list[str] = []
-    if frame_useful:
-        context_parts.append(f"Visual lecture signal:\n{frame_analysis}")
-    if transcript_useful:
-        context_parts.append(f"Audio lecture signal:\n{transcript}")
-    usable_context = "\n\n".join(context_parts).strip()
+    image_context = frame_analysis if frame_useful else "(empty)"
+    transcript_context = transcript if transcript_useful else "(empty)"
+    has_usable_context = frame_useful or transcript_useful
 
-    if not usable_context:
-        usable_context = "(No strong lecture signal detected from current capture.)"
-
-    memory_context = (session.get("last_context_summary") or "").strip()
-    context_summary = (state.get("context_summary") or memory_context or "").strip()
-
-    if wants_context_reference and not context_summary and usable_context == "(No strong lecture signal detected from current capture.)":
+    needs_context = intent in {"context_only", "context_plus_theory"}
+    if needs_context and not has_usable_context:
         answer = (
-            "I need a capture-linked context for this question because you asked about the current lesson case. "
-            "Please press Capture Moment, then ask again. I will use the captured audio and frame context to explain it in that lesson."
+            "I need the captured screen or audio context for this. "
+            "Please press Capture Moment, then ask again so I can use what is currently visible or being discussed."
         )
         print(
             f"[TA-ASSIST][tutor] context required but unavailable answer_len={len(answer)}",
@@ -277,31 +228,41 @@ def tutor_node(state: AssistState) -> AssistState:
         return {"answer": answer}
 
     user_question = user_text or "Explain this captured lesson moment."
-    mode = "question_focused" if user_text else "context_summary"
-
-    prompt = (
-        "You are a teaching assistant.\n"
-        "Write plain text only. No markdown, no bullet points, no JSON.\n"
-        "Always produce a complete explanation, not a one-line answer.\n"
-        "Target 220-420 words unless context is missing.\n"
-        "If context is weak, state that briefly and still provide the best lesson-oriented explanation.\n"
-        "Prioritize what helps a student learn this moment.\n\n"
-        f"Mode: {mode}\n"
-        f"Intent: {state.get('intent', '')}\n"
-        f"Router reason: {router_reason or '(none)'}\n"
-        f"Answer goal: {answer_goal or '(none)'}\n"
-        f"Wants context reference: {wants_context_reference}\n"
+    shared_context = (
         f"Recent QA history:\n{history_text}\n\n"
-        f"Usable current context:\n{usable_context}\n\n"
-        f"Original full context summary:\n{context_summary or '(none)'}\n\n"
-        f"User question:\n{user_question}\n\n"
-        "Rules:\n"
-        "1) If user question is specific, answer it first, then connect to the current lesson moment.\n"
-        "2) If user question is empty/generic (like explain this), summarize what is being taught now, "
-        "what concept is on screen, and what the student should focus on next.\n"
-        "3) Validate usefulness of audio/visual context and ignore noisy/unrelated parts.\n"
-        "4) End with a short next-step suggestion for the student."
+        f"Image:\n{image_context}\n\n"
+        f"Transcript:\n{transcript_context}\n\n"
+        f"User question:\n{user_question}"
     )
+
+    if frame_activity_type == "assignment":
+        prompt = (
+            "You are a teaching assistant in homework-coach mode.\n"
+            "Write plain text only. No markdown, no bullet points, no JSON.\n"
+            "Write a natural teaching explanation in 60-140 words.\n"
+            "Your job is to guide the student's thinking based on their current work, not to complete the assignment for them.\n\n"
+            f"{shared_context}\n\n"
+            "Rules:\n"
+            "1) Do not give the final answer, finished code, completed proof, completed diagram, final equation, final regular expression, or final written response.\n"
+            "2) Do not certify correctness. Never say the final answer is correct, incorrect, right, wrong, ready to submit, or not ready to submit, even if the student asks.\n"
+            "3) Analyze what the student appears to be doing and respond to their current progress.\n"
+            "4) If the student is stuck, give one small hint or one small next step, not the full solution.\n"
+            "5) If the student appears to have completed the work, encourage a self-check or testing step instead of confirming whether it is correct.\n"
+            "6) If the user asks directly for the answer, briefly say you can't provide the final answer for an assignment, then offer a hint or a way to check their reasoning."
+        )
+    else:
+        prompt = (
+            "You are a teaching assistant.\n"
+            "Write plain text only. No markdown, no bullet points, no JSON.\n"
+            "Write a natural teaching explanation in 100-200 words.\n"
+            "If context is weak, state that briefly and still provide the best lesson-oriented explanation.\n"
+            "Prioritize what helps a student learn this moment.\n\n"
+            f"{shared_context}\n\n"
+            "Rules:\n"
+            "1) If user question is specific, answer it first, then connect to the current lesson moment.\n"
+            "2) If user question is empty/generic (like explain this), summarize what is being taught now, what concept is on screen, and what the student should focus on next.\n"
+            "3) Validate usefulness of audio/visual context and ignore noisy/unrelated parts.\n"
+        )
 
     response = client.models.generate_content(
         model=tutor_model,
@@ -312,28 +273,9 @@ def tutor_node(state: AssistState) -> AssistState:
         ),
     )
     answer = (response.text or "").strip()
-    if len(answer) < 220 and usable_context != "(No strong lecture signal detected from current capture.)":
-        expansion_prompt = (
-            "Rewrite and expand this teaching answer for clarity and completeness.\n"
-            "Write plain text only and keep it lesson-focused.\n"
-            "Target 260-420 words.\n\n"
-            f"Answer draft:\n{answer}\n\n"
-            f"Usable context:\n{usable_context}\n\n"
-            f"User question:\n{user_question}"
-        )
-        second = client.models.generate_content(
-            model=tutor_model,
-            contents=expansion_prompt,
-            config=types.GenerateContentConfig(
-                temperature=0.2,
-                max_output_tokens=tutor_max_output_tokens,
-            ),
-        )
-        expanded = (second.text or "").strip()
-        if expanded:
-            answer = expanded
     print(
-        f"[TA-ASSIST][tutor] model={tutor_model} answer_len={len(answer)} intent={state.get('intent')}",
+        f"[TA-ASSIST][tutor] model={tutor_model} answer_len={len(answer)} "
+        f"intent={intent} activity_type={frame_activity_type}",
         flush=True,
     )
     return {"answer": answer}
@@ -341,9 +283,8 @@ def tutor_node(state: AssistState) -> AssistState:
 
 def save_memory_node(state: AssistState) -> AssistState:
     sid = state["session_id"]
-    existing = SESSION_MEMORY.get(sid, {"last_context_summary": "", "history": [], "updated_at": 0.0})
+    existing = SESSION_MEMORY.get(sid, {"history": [], "updated_at": 0.0})
 
-    context_summary = state.get("context_summary") or existing["last_context_summary"]
     history = existing["history"]
     user_text = (state.get("user_text") or "").strip()
     answer = (state.get("answer") or "").strip()
@@ -353,13 +294,11 @@ def save_memory_node(state: AssistState) -> AssistState:
             history = history[-20:]
 
     SESSION_MEMORY[sid] = {
-        "last_context_summary": context_summary,
         "history": history,
         "updated_at": time.time(),
     }
     print(
-        f"[TA-ASSIST][memory] session={sid} history_items={len(history)} "
-        f"context_len={len(context_summary)}",
+        f"[TA-ASSIST][memory] session={sid} history_items={len(history)}",
         flush=True,
     )
     return {}
@@ -375,7 +314,7 @@ def build_graph():
     graph.add_edge(START, "classify_intent")
 
     def route_after_intent(state: AssistState):
-        return "context_node" if state.get("should_run_context") else "tutor_node"
+        return "context_node" if state.get("intent") in {"context_only", "context_plus_theory", "theory_only"} else "tutor_node"
 
     graph.add_conditional_edges("classify_intent", route_after_intent)
     graph.add_edge("context_node", "tutor_node")

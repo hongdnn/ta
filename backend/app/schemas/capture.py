@@ -10,8 +10,7 @@ class CaptureResponse(BaseModel):
     transcript: str
     ocr_text: str = ""
     frame_analysis: str = ""
-    context_summary: str = ""
+    frame_activity_type: str = "lecture"
     duration_seconds: float | None = None
     audio_dbfs: float | None = None
     audio_peak_dbfs: float | None = None
-

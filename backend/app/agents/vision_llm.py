@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 
 import google.genai as genai
@@ -8,7 +9,26 @@ import cv2
 import numpy as np
 
 
-def describe_frame_with_gemini(image_bytes: bytes, transcript: str) -> str:
+def _extract_json_object(raw: str) -> dict:
+    text = (raw or "").strip()
+    if not text:
+        return {}
+    try:
+        return json.loads(text)
+    except Exception:
+        pass
+
+    start = text.find("{")
+    end = text.rfind("}")
+    if start >= 0 and end > start:
+        try:
+            return json.loads(text[start : end + 1])
+        except Exception:
+            return {}
+    return {}
+
+
+def describe_frame_with_gemini(image_bytes: bytes, user_text: str) -> tuple[str, str]:
     project = os.getenv("GOOGLE_CLOUD_PROJECT", "").strip()
     location = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1").strip()
     model = os.getenv("VLM_MODEL", "gemini-2.5-flash").strip()
@@ -17,19 +37,27 @@ def describe_frame_with_gemini(image_bytes: bytes, transcript: str) -> str:
         raise RuntimeError("GOOGLE_CLOUD_PROJECT is required for Gemini Vertex calls.")
 
     client = genai.Client(vertexai=True, project=project, location=location)
+    user_question = (user_text or "").strip()
 
     prompt = (
-        "You analyze a single lecture frame for a teaching assistant.\n"
-        "Priority: lecture content only.\n"
-        "Ignore website/browser chrome and unrelated UI, including tabs, URL bar, sidebars, recommendations,"
-        " notifications, buttons, ads, and overlays.\n"
-        "Focus on the board/video teaching area and infer the academic step.\n\n"
-        "Return plain text only (no JSON, no markdown, no bullet symbols).\n"
-        "Write 2-4 short paragraphs covering:\n"
-        "1) The main teaching content visible on screen.\n"
-        "2) The key things a student should focus on now (if any).\n"
-        "3) The likely current step in the explanation.\n"
-        "Always finish complete sentences and avoid truncation."
+        "You analyze a single learning screen for a teaching assistant.\n"
+        "Return JSON only. Do not use markdown.\n"
+        "Return exactly this schema:\n"
+        "{\n"
+        '  "activity_type": "lecture|assignment",\n'
+        '  "analysis": "plain text description of the visible learning context"\n'
+        "}\n\n"
+        "Activity type definitions:\n"
+        "- lecture: The student is watching or reviewing teaching material, such as an online course, live class, lecture video, slide deck, textbook, notes, or explanation.\n"
+        "- assignment: The student is actively working on homework or an assignment, such as writing an answer, coding, solving a problem, reviewing their own solution, or using an assignment website/document/editor.\n\n"
+        "Analysis rules:\n"
+        "1) Focus on learning-relevant content and ignore unrelated browser/app chrome when possible.\n"
+        "2) If the student asked a specific question, focus the analysis on the visual evidence most relevant to answering that question.\n"
+        "3) For lecture, describe what is being taught and the visual details that matter most for the student's question.\n"
+        "4) For assignment, describe what the student appears to be working on, their visible progress, and the visual details that matter most for the student's question, without solving it.\n"
+        "5) Prefer concrete visual evidence over broad scene summary. Mention equations, labels, arrows, marked points, diagrams, annotations, or local graph features when they are relevant.\n"
+        "6) Keep analysis to 1-3 short paragraphs and finish complete sentences.\n\n"
+        f"Student question: {user_question or '(none)'}"
     )
 
     processed_image = auto_crop_main_content(image_bytes)
@@ -46,11 +74,19 @@ def describe_frame_with_gemini(image_bytes: bytes, transcript: str) -> str:
         ),
     )
 
-    return (response.text or "").strip()
+    raw_text = (response.text or "").strip()
+    payload = _extract_json_object(raw_text)
+    activity_type = str(payload.get("activity_type", "")).strip().lower()
+    if activity_type not in {"lecture", "assignment"}:
+        activity_type = "lecture"
+    analysis = str(payload.get("analysis", "")).strip()
+    if not analysis:
+        analysis = raw_text
+    return activity_type, analysis
 
 
 def auto_crop_main_content(image_bytes: bytes) -> bytes:
-    if os.getenv("AUTO_CROP_ENABLED", "1") != "1":
+    if os.getenv("AUTO_CROP_ENABLED", "0") != "1":
         return image_bytes
 
     np_arr = np.frombuffer(image_bytes, np.uint8)

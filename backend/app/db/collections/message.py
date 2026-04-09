@@ -9,7 +9,7 @@ COLLECTION_NAME = "messages"
 VALIDATOR = {
     "$jsonSchema": {
         "bsonType": "object",
-        "required": ["session_id", "course_id", "creator", "content", "created_at", "updated_at"],
+        "required": ["session_id", "course_id", "creator", "content", "activity_type", "created_at", "updated_at"],
         "properties": {
             "session_id": {"bsonType": "objectId"},
             "course_id": {"bsonType": "objectId"},
@@ -17,6 +17,7 @@ VALIDATOR = {
             "user_id": {"bsonType": ["objectId", "null"]},
             "content": {"bsonType": "string"},
             "content_normalized": {"bsonType": "string"},
+            "activity_type": {"enum": ["lecture", "assignment"]},
             "answer_to_message_id": {"bsonType": ["objectId", "null"]},
             "cluster_id": {"bsonType": ["objectId", "null"]},
             "created_at": {"bsonType": "date"},

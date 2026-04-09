@@ -148,17 +148,19 @@ class AssistService:
 
         transcript = result.get("transcript", "")
         frame_analysis = result.get("frame_analysis", "")
+        frame_activity_type = (result.get("frame_activity_type") or "lecture").strip()
+        if frame_activity_type not in {"lecture", "assignment"}:
+            frame_activity_type = "lecture"
         answer = result.get("answer", "")
         intent = result.get("intent", "")
         route = result.get("route", "")
-        context_summary = result.get("context_summary", "")
         language = result.get("language", language)
         duration = result.get("duration_seconds", duration)
 
         print("\n=== TA CAPTURE RECEIVED ===")
         print(f"sourceId={source_id} sourceType={source_type} courseName={course_name}")
         print(f"captureDurationSeconds={capture_duration_seconds} capturedAt={captured_at}")
-        print(f"intent={intent} route={route} captureTriggered={capture_triggered}")
+        print(f"intent={intent} route={route} activityType={frame_activity_type} captureTriggered={capture_triggered}")
         print(f"userText={user_text if user_text else '(empty)'}")
         print(f"language={language} duration={duration}")
         print(f"rms_dbfs={rms_dbfs} peak_dbfs={peak_dbfs}")
@@ -179,7 +181,7 @@ class AssistService:
             transcript=transcript,
             ocr_text="",
             frame_analysis=frame_analysis,
-            context_summary=context_summary,
+            frame_activity_type=frame_activity_type,
             duration_seconds=duration,
             audio_dbfs=rms_dbfs,
             audio_peak_dbfs=peak_dbfs,
@@ -187,7 +189,7 @@ class AssistService:
         print("\n=== TA RESPONSE TO FRONTEND ===")
         print(f"ok={response_payload.ok} intent={response_payload.intent} route={response_payload.route}")
         print(f"answer_len={len(response_payload.answer)} transcript_len={len(response_payload.transcript)}")
-        print(f"frame_analysis_len={len(response_payload.frame_analysis)} context_summary_len={len(response_payload.context_summary)}")
+        print(f"frame_analysis_len={len(response_payload.frame_analysis)}")
         print("=== END RESPONSE ===\n")
 
         asyncio.create_task(
@@ -198,6 +200,7 @@ class AssistService:
                 answer=answer,
                 captured_at=captured_at,
                 intent=intent,
+                activity_type=frame_activity_type,
                 user_id=user_id,
             )
         )
@@ -211,9 +214,12 @@ class AssistService:
         answer: str,
         captured_at: str | None,
         intent: str,
+        activity_type: str,
         user_id: str,
     ) -> None:
         try:
+            if activity_type not in {"lecture", "assignment"}:
+                activity_type = "lecture"
             if not ObjectId.is_valid(user_id):
                 print("[TA-BACKEND][persist] skipped: invalid user id for analytics", flush=True)
                 return
@@ -254,6 +260,7 @@ class AssistService:
                 user_id=user_oid,
                 content=user_content,
                 content_normalized=normalized_user_text,
+                activity_type=activity_type,
                 answer_to_message_id=None,
                 cluster_id=None,
                 created_at=now,
@@ -261,7 +268,7 @@ class AssistService:
             )
 
             cluster_id = None
-            if intent != "context_only":
+            if activity_type == "lecture" and intent != "context_only":
                 if not self.chroma_cluster_store.enabled:
                     print(
                         f"[TA-BACKEND][persist] clustering skipped: CHROMA_ENABLED is off "
@@ -307,6 +314,7 @@ class AssistService:
                 user_id=user_oid,
                 content=agent_content,
                 content_normalized=normalized_answer,
+                activity_type=activity_type,
                 answer_to_message_id=user_message_id,
                 cluster_id=cluster_id,
                 created_at=now,
@@ -349,7 +357,7 @@ class AssistService:
             else:
                 print(
                     f"[TA-BACKEND][persist] saved messages only (cluster skipped) "
-                    f"course_id={str(course_id)} intent={intent}",
+                    f"course_id={str(course_id)} intent={intent} activity_type={activity_type}",
                     flush=True,
                 )
         except Exception as exc:  # noqa: BLE001
