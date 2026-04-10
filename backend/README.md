@@ -122,7 +122,7 @@ uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 - `ROUTER_MODEL` (default: `gemini-2.0-flash-lite`)
 - `TUTOR_MODEL` (default: `gemini-2.5-flash`)
 - `TUTOR_MAX_OUTPUT_TOKENS` (default: `2400`)
-- `AUTO_CROP_ENABLED` (default: `1`)
+- `AUTO_CROP_ENABLED` (default: `0`)
 - `MONGODB_URL` (required for `init-mongo`)
 - `MONGODB_DB_NAME` (default: `ta`)
 - `MONGO_INIT_ON_STARTUP` (default: `0`; set `1` to auto-init schema on API startup)
