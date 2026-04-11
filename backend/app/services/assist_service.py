@@ -165,7 +165,12 @@ class AssistService:
         print(f"language={language} duration={duration}")
         print(f"rms_dbfs={rms_dbfs} peak_dbfs={peak_dbfs}")
         print("\nIMAGE ANALYSIS:")
-        print(frame_analysis if frame_analysis else "(empty)")
+        if frame_analysis:
+            print(frame_analysis)
+        elif frame_bytes is not None:
+            print("(handled inside tutor multimodal call)")
+        else:
+            print("(empty)")
         print("\nTRANSCRIPT:")
         print(transcript if transcript else "(empty)")
         print("\nANSWER:")

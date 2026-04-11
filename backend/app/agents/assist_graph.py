@@ -148,13 +148,10 @@ def classify_intent_node(state: AssistState) -> AssistState:
 
 def context_node(state: AssistState) -> AssistState:
     transcript = ""
-    frame_analysis = ""
-    frame_activity_type = "lecture"
     language = None
     duration_seconds = None
 
     audio_tmp_path = state.get("audio_tmp_path")
-    frame_bytes = state.get("frame_bytes")
 
     if audio_tmp_path:
         try:
@@ -168,24 +165,12 @@ def context_node(state: AssistState) -> AssistState:
             transcript = ""
             print("[TA-ASSIST][context] STT failed -> transcript empty", flush=True)
 
-    if frame_bytes:
-        try:
-            frame_activity_type, frame_analysis = describe_frame_with_gemini(frame_bytes, state.get("user_text") or "")
-            print(
-                f"[TA-ASSIST][context] Frame analysis done activity_type={frame_activity_type} len={len(frame_analysis)}",
-                flush=True,
-            )
-        except Exception:
-            frame_analysis = ""
-            frame_activity_type = "lecture"
-            print("[TA-ASSIST][context] Frame analysis failed -> empty", flush=True)
-
+    if state.get("frame_bytes"):
+        print("[TA-ASSIST][context] Image analysis deferred to tutor multimodal call", flush=True)
     print("[TA-ASSIST][context] OCR skipped (disabled in current flow)", flush=True)
 
     return {
         "transcript": transcript,
-        "frame_analysis": frame_analysis,
-        "frame_activity_type": frame_activity_type,
         "language": language,
         "duration_seconds": duration_seconds,
     }
@@ -202,83 +187,80 @@ def tutor_node(state: AssistState) -> AssistState:
 
     user_text = (state.get("user_text") or "").strip()
     transcript = (state.get("transcript") or "").strip()
-    frame_analysis = (state.get("frame_analysis") or "").strip()
-    intent = (state.get("intent") or "").strip()
-    frame_activity_type = (state.get("frame_activity_type") or "lecture").strip().lower()
-    if frame_activity_type not in {"lecture", "assignment"}:
-        frame_activity_type = "lecture"
-
-    transcript_useful = _is_useful_signal(transcript, min_words=18)
-    frame_useful = _is_useful_signal(frame_analysis, min_words=30)
-
-    image_context = frame_analysis if frame_useful else "(empty)"
-    transcript_context = transcript if transcript_useful else "(empty)"
-    has_usable_context = frame_useful or transcript_useful
-
-    needs_context = intent in {"context_only", "context_plus_theory"}
-    if needs_context and not has_usable_context:
-        answer = (
-            "I need the captured screen or audio context for this. "
-            "Please press Capture Moment, then ask again so I can use what is currently visible or being discussed."
-        )
-        print(
-            f"[TA-ASSIST][tutor] context required but unavailable answer_len={len(answer)}",
-            flush=True,
-        )
-        return {"answer": answer}
-
+    frame_bytes = state.get("frame_bytes")
     user_question = user_text or "Explain this captured lesson moment."
     shared_context = (
         f"Recent QA history:\n{history_text}\n\n"
-        f"Image:\n{image_context}\n\n"
-        f"Transcript:\n{transcript_context}\n\n"
+        f"Transcript:\n{transcript or '(empty)'}\n\n"
         f"User question:\n{user_question}"
     )
+    prompt = (
+        "You are a teaching assistant.\n"
+        "Analyze the student's current screen, transcript, recent history, and question together.\n"
+        "Return JSON only. Do not use markdown.\n"
+        "Return exactly this schema:\n"
+        "{\n"
+        '  "intent": "context_only|theory_only|context_plus_theory",\n'
+        '  "activity_type": "lecture|assignment",\n'
+        '  "answer": "plain text answer for the student"\n'
+        "}\n\n"
+        "Intent definitions:\n"
+        "- context_only: The user is asking about the current screen, current explanation, visible work, transcript, or a short follow-up that depends on current/prior context.\n"
+        "- theory_only: The user is asking a standalone concept question.\n"
+        "- context_plus_theory: The user is asking a concept question and also referencing the current context.\n\n"
+        "Activity type definitions:\n"
+        "- lecture: The student is studying lecture or course material, such as a lecture slide, video, textbook, notes, worked example, or live class.\n"
+        "- assignment: The student is actively working on homework or an assignment, such as solving a problem, writing code, drafting an answer, or reviewing their own solution.\n\n"
+        "Answer rules:\n"
+        "1) Use the image and transcript when they help the answer. If the image is relevant, use its visible evidence directly.\n"
+        "2) If activity_type is lecture, write a natural teaching explanation in 100-200 words.\n"
+        "3) For lecture, if the question is specific, answer it first, then connect it to the current lesson moment when useful.\n"
+        "4) For lecture, if the question is empty or generic, summarize what is being taught now, what concept is visible, and what the student should focus on next.\n"
+        "5) If activity_type is assignment, write a natural teaching explanation in 60-140 words.\n"
+        "6) For assignment, do not give the final answer, finished code, completed proof, completed diagram, final equation, final regular expression, or final written response.\n"
+        "7) For assignment, do not certify correctness. Never say the final answer is correct, incorrect, right, wrong, ready to submit, or not ready to submit, even if the student asks.\n"
+        "8) For assignment, analyze what the student appears to be doing and respond to their current progress.\n"
+        "9) For assignment, if the student is stuck, give one small hint or one small next step, not the full solution.\n"
+        "10) For assignment, if the student appears to have completed the work, encourage a self-check or testing step instead of confirming whether it is correct.\n"
+        "11) If there is no useful image or transcript context and the user asks about the current screen or current explanation, say briefly that you need a clearer capture.\n\n"
+        f"{shared_context}"
+    )
 
-    if frame_activity_type == "assignment":
-        prompt = (
-            "You are a teaching assistant in homework-coach mode.\n"
-            "Write plain text only. No markdown, no bullet points, no JSON.\n"
-            "Write a natural teaching explanation in 60-140 words.\n"
-            "Your job is to guide the student's thinking based on their current work, not to complete the assignment for them.\n\n"
-            f"{shared_context}\n\n"
-            "Rules:\n"
-            "1) Do not give the final answer, finished code, completed proof, completed diagram, final equation, final regular expression, or final written response.\n"
-            "2) Do not certify correctness. Never say the final answer is correct, incorrect, right, wrong, ready to submit, or not ready to submit, even if the student asks.\n"
-            "3) Analyze what the student appears to be doing and respond to their current progress.\n"
-            "4) If the student is stuck, give one small hint or one small next step, not the full solution.\n"
-            "5) If the student appears to have completed the work, encourage a self-check or testing step instead of confirming whether it is correct.\n"
-            "6) If the user asks directly for the answer, briefly say you can't provide the final answer for an assignment, then offer a hint or a way to check their reasoning."
-        )
-    else:
-        prompt = (
-            "You are a teaching assistant.\n"
-            "Write plain text only. No markdown, no bullet points, no JSON.\n"
-            "Write a natural teaching explanation in 100-200 words.\n"
-            "If context is weak, state that briefly and still provide the best lesson-oriented explanation.\n"
-            "Prioritize what helps a student learn this moment.\n\n"
-            f"{shared_context}\n\n"
-            "Rules:\n"
-            "1) If user question is specific, answer it first, then connect to the current lesson moment.\n"
-            "2) If user question is empty/generic (like explain this), summarize what is being taught now, what concept is on screen, and what the student should focus on next.\n"
-            "3) Validate usefulness of audio/visual context and ignore noisy/unrelated parts.\n"
-        )
+    contents: list[object] = [prompt]
+    if frame_bytes:
+        contents.insert(0, types.Part.from_bytes(data=frame_bytes, mime_type="image/png"))
 
     response = client.models.generate_content(
         model=tutor_model,
-        contents=prompt,
+        contents=contents,
         config=types.GenerateContentConfig(
             temperature=0.2,
             max_output_tokens=tutor_max_output_tokens,
         ),
     )
-    answer = (response.text or "").strip()
+    raw_text = (response.text or "").strip()
+    payload = _extract_json_object(raw_text)
+    intent = str(payload.get("intent", "")).strip().lower()
+    if intent not in {"context_only", "theory_only", "context_plus_theory"}:
+        intent = "context_only" if not user_text else "theory_only"
+    frame_activity_type = str(payload.get("activity_type", "")).strip().lower()
+    if frame_activity_type not in {"lecture", "assignment"}:
+        frame_activity_type = "lecture"
+    answer = str(payload.get("answer", "")).strip()
+    if not answer:
+        answer = raw_text
     print(
         f"[TA-ASSIST][tutor] model={tutor_model} answer_len={len(answer)} "
         f"intent={intent} activity_type={frame_activity_type}",
         flush=True,
     )
-    return {"answer": answer}
+    return {
+        "intent": intent,
+        "route": intent,
+        "frame_activity_type": frame_activity_type,
+        "frame_analysis": "",
+        "answer": answer,
+    }
 
 
 def save_memory_node(state: AssistState) -> AssistState:
@@ -306,17 +288,11 @@ def save_memory_node(state: AssistState) -> AssistState:
 
 def build_graph():
     graph = StateGraph(AssistState)
-    graph.add_node("classify_intent", classify_intent_node)
     graph.add_node("context_node", context_node)
     graph.add_node("tutor_node", tutor_node)
     graph.add_node("save_memory", save_memory_node)
 
-    graph.add_edge(START, "classify_intent")
-
-    def route_after_intent(state: AssistState):
-        return "context_node" if state.get("intent") in {"context_only", "context_plus_theory", "theory_only"} else "tutor_node"
-
-    graph.add_conditional_edges("classify_intent", route_after_intent)
+    graph.add_edge(START, "context_node")
     graph.add_edge("context_node", "tutor_node")
     graph.add_edge("tutor_node", "save_memory")
     graph.add_edge("save_memory", END)
