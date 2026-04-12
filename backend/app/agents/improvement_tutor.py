@@ -5,6 +5,7 @@ import os
 from typing import Any
 
 import google.genai as genai
+import requests
 from google.genai import types
 
 
@@ -137,3 +138,78 @@ def generate_weekly_improvements(candidates: list[dict[str, Any]]) -> tuple[list
             }
         )
     return normalized, model
+
+
+def rerank_material_chunks(
+    *,
+    question: str,
+    chunks: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    if not question.strip() or not chunks:
+        return []
+
+    api_key = os.getenv("COHERE_API_KEY", "").strip()
+    if not api_key:
+        print("[TA-BACKEND][materials][cohere] skipped: COHERE_API_KEY is missing", flush=True)
+        return []
+    model = os.getenv("COHERE_RERANK_MODEL", "rerank-v4.0-pro").strip() or "rerank-v4.0-pro"
+    documents = [
+        (
+            f"File: {chunk.get('file_name', '')}\n"
+            f"Page: {int(chunk.get('page', 0) or 0)}\n"
+            f"Text:\n{str(chunk.get('text', ''))[:2500]}"
+        )
+        for chunk in chunks
+    ]
+    query = (
+        "Find course material that helps a professor review this student question in the next class.\n"
+        f"Student question: {question}"
+    )
+    try:
+        print(
+            f"[TA-BACKEND][materials][cohere] rerank start model={model} candidates={len(documents)} "
+            f"question={question[:120]!r}",
+            flush=True,
+        )
+        response = requests.post(
+            "https://api.cohere.com/v2/rerank",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": model,
+                "query": query,
+                "documents": documents,
+                "top_n": len(documents),
+            },
+            timeout=20,
+        )
+        response.raise_for_status()
+        rows = response.json().get("results", [])
+    except Exception as exc:  # noqa: BLE001
+        print(f"[TA-BACKEND][materials][cohere] rerank failed: {exc}", flush=True)
+        return []
+
+    scored: list[dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        try:
+            index = int(row.get("index"))
+            score = float(row.get("relevance_score"))
+        except Exception:
+            continue
+        if 0 <= index < len(chunks):
+            item = dict(chunks[index])
+            item["rerank_score"] = max(0.0, min(score, 1.0))
+            scored.append(item)
+    scored.sort(key=lambda item: float(item.get("rerank_score", 0.0)), reverse=True)
+    for item in scored:
+        print(
+            "[TA-BACKEND][materials][cohere] "
+            f"score={float(item.get('rerank_score', 0.0)):.4f} "
+            f"file={item.get('file_name')} page={item.get('page')}",
+            flush=True,
+        )
+    return scored

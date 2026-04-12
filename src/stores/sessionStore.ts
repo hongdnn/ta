@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { audioRingBuffer } from '@/lib/audioRingBuffer';
-import { ASSIST_PATH, uploadCapture } from '@/api/captures';
+import { ASSIST_STREAM_PATH, uploadCaptureStream } from '@/api/captures';
 import { ApiClientError, getApiBaseUrl } from '@/api/apiClient';
 import { createSession, endSession } from '@/api/sessions';
 import { captureSourceFrame } from '@/lib/frameCapture';
@@ -135,7 +135,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
   settings: {
     hotkey: 'Ctrl+Shift+Space',
-    captureDuration: 20,
+    captureDuration: 30,
     includeAudio: true,
     compactMiniPanel: false,
     localOnly: true,
@@ -174,7 +174,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         messages: [],
       });
 
-      // Always keep renderer audio ring buffer running so we have a stable 20s fallback.
+      // Always keep renderer audio ring buffer running so we have a stable recent-audio fallback.
       if (window.taAPI?.setDisplayMediaSource) {
         await window.taAPI.setDisplayMediaSource(selectedSource.id);
       }
@@ -294,10 +294,84 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
 
 function pushMessage(role: 'user' | 'assistant', text: string) {
   const trimmed = text.trim();
-  if (!trimmed) return;
+  if (!trimmed) return null;
+  const id = crypto.randomUUID();
   useSessionStore.setState((s) => ({
-    messages: [...s.messages, { id: crypto.randomUUID(), role, text: trimmed, createdAt: Date.now() }],
+    messages: [...s.messages, { id, role, text: trimmed, createdAt: Date.now() }],
   }));
+  return id;
+}
+
+function startAssistantMessage() {
+  const id = crypto.randomUUID();
+  useSessionStore.setState((s) => ({
+    messages: [...s.messages, { id, role: 'assistant', text: '', createdAt: Date.now() }],
+  }));
+  return id;
+}
+
+function appendToMessage(id: string, text: string) {
+  if (!text) return;
+  useSessionStore.setState((s) => ({
+    messages: s.messages.map((message) =>
+      message.id === id ? { ...message, text: `${message.text}${text}` } : message
+    ),
+  }));
+}
+
+function replaceMessage(id: string, text: string) {
+  useSessionStore.setState((s) => ({
+    messages: s.messages.map((message) =>
+      message.id === id ? { ...message, text } : message
+    ),
+  }));
+}
+
+function createSmoothMessageAppender(messageId: string) {
+  let queuedText = '';
+  let intervalId: number | null = null;
+  let hasStartedOutput = false;
+  const charactersPerTick = 1;
+  const tickMs = 18;
+
+  const stop = () => {
+    if (intervalId !== null) {
+      window.clearInterval(intervalId);
+      intervalId = null;
+    }
+  };
+
+  const tick = () => {
+    if (!queuedText) {
+      stop();
+      return;
+    }
+    const next = queuedText.slice(0, charactersPerTick);
+    queuedText = queuedText.slice(charactersPerTick);
+    appendToMessage(messageId, next);
+  };
+
+  return {
+    add(text: string) {
+      if (!text) return;
+      queuedText += text;
+      if (!hasStartedOutput) {
+        hasStartedOutput = true;
+        useSessionStore.setState({ assistantState: 'result', processingStep: 'DONE' });
+      }
+      if (intervalId === null) {
+        intervalId = window.setInterval(tick, tickMs);
+      }
+    },
+    flush() {
+      stop();
+      if (queuedText) {
+        appendToMessage(messageId, queuedText);
+        queuedText = '';
+      }
+    },
+    stop,
+  };
 }
 
 async function uploadFromContext(
@@ -320,20 +394,40 @@ async function uploadFromContext(
     captureDuration: settings.captureDuration,
   });
 
+  let assistantMessageId: string | null = null;
+  let smoothAppender: ReturnType<typeof createSmoothMessageAppender> | null = null;
   try {
-    const response = await uploadCapture({
-      audioClip,
-      frameImage,
-      sourceId: selectedSource.id,
-      sourceType: selectedSource.type,
-      captureDurationSeconds: settings.captureDuration,
-      courseName: useSessionStore.getState().activeCourseName ?? '',
-      capturedAt: new Date().toISOString(),
-      userText,
-      captureTriggered,
-      sessionId: backendSessionId,
-    });
-    pushMessage('assistant', response.answer ?? '');
+    assistantMessageId = startAssistantMessage();
+    const activeAssistantMessageId = assistantMessageId;
+    smoothAppender = createSmoothMessageAppender(activeAssistantMessageId);
+    let streamedText = '';
+    const response = await uploadCaptureStream(
+      {
+        audioClip,
+        frameImage,
+        sourceId: selectedSource.id,
+        sourceType: selectedSource.type,
+        captureDurationSeconds: settings.captureDuration,
+        courseName: useSessionStore.getState().activeCourseName ?? '',
+        capturedAt: new Date().toISOString(),
+        userText,
+        captureTriggered,
+        sessionId: backendSessionId,
+      },
+      {
+        onAnswerDelta: (text) => {
+          streamedText += text;
+          smoothAppender.add(text);
+        },
+        onFinal: (finalResponse) => {
+          smoothAppender.flush();
+          if (!streamedText.trim()) {
+            replaceMessage(activeAssistantMessageId, finalResponse.answer ?? '');
+          }
+        },
+      }
+    );
+    smoothAppender.flush();
     useSessionStore.setState({
       lastCaptureUpload: 'success',
       lastCaptureReason: null,
@@ -346,9 +440,9 @@ async function uploadFromContext(
     let message = 'Capture upload failed.';
     if (error instanceof ApiClientError) {
       if (error.status === 404) {
-        message = `Backend route not found: ${error.method ?? 'POST'} ${error.url ?? `${getApiBaseUrl()}${ASSIST_PATH}`}`;
+        message = `Backend route not found: ${error.method ?? 'POST'} ${error.url ?? `${getApiBaseUrl()}${ASSIST_STREAM_PATH}`}`;
       } else if (error.code === 'ECONNABORTED') {
-        message = `Backend request timed out after 60s: ${error.url ?? `${getApiBaseUrl()}${ASSIST_PATH}`}`;
+        message = `Backend request timed out after 60s: ${error.url ?? `${getApiBaseUrl()}${ASSIST_STREAM_PATH}`}`;
       } else if (error.status === null) {
         message = `Cannot reach backend: ${getApiBaseUrl()}`;
       } else {
@@ -357,6 +451,7 @@ async function uploadFromContext(
     } else if (error instanceof Error) {
       message = error.message;
     }
+    smoothAppender?.stop();
     useSessionStore.setState({
       lastCaptureUpload: 'error',
       lastCaptureReason: message,
@@ -364,7 +459,11 @@ async function uploadFromContext(
       processingStep: 'DONE',
       lastAssistantAnswer: message,
     });
-    pushMessage('assistant', message);
+    if (assistantMessageId) {
+      replaceMessage(assistantMessageId, message);
+    } else {
+      pushMessage('assistant', message);
+    }
     logToTerminal('error', message, error);
   }
 }

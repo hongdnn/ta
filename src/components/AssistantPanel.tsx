@@ -79,7 +79,8 @@ export function AssistantPanel() {
   };
 
   const processingStep = useSessionStore((s) => s.processingStep);
-  const hasMessages = messages.length > 0;
+  const visibleMessages = messages.filter((msg) => msg.role === 'user' || msg.text.trim().length > 0);
+  const hasMessages = visibleMessages.length > 0;
   const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
 
   // Keep Codex-like browsing behavior, but auto-scroll when the user sends a new message.
@@ -110,7 +111,7 @@ export function AssistantPanel() {
 
         {hasMessages && (
           <div className="p-4 space-y-3">
-            {messages.map((msg) => (
+            {visibleMessages.map((msg) => (
               <div
                 key={msg.id}
                 className={cn(

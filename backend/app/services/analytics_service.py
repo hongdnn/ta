@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any
 
 from bson import ObjectId
 from fastapi import HTTPException
 
-from app.agents.improvement_tutor import generate_weekly_improvements
+from app.agents.improvement_tutor import generate_weekly_improvements, rerank_material_chunks
+from app.chroma.material_store import ChromaMaterialStore
+from app.core.config import settings
 from app.repositories.cluster_repository import ClusterRepository
 from app.repositories.cluster_weekly_stats_repository import ClusterWeeklyStatsRepository
 from app.repositories.course_repository import CourseRepository
@@ -20,6 +23,9 @@ from app.schemas.analytics import (
     TopQuestionItem,
     WeeklyImprovementItem,
 )
+
+
+MAX_REVIEW_MATERIALS_PER_IMPROVEMENT = 3
 
 
 def _parse_utc_iso(value: str) -> datetime:
@@ -41,6 +47,7 @@ class AnalyticsService:
         message_repo: MessageRepository,
         cluster_weekly_stats_repo: ClusterWeeklyStatsRepository,
         weekly_improvements_repo: WeeklyImprovementsRepository,
+        chroma_material_store: ChromaMaterialStore,
     ):
         self.course_repo = course_repo
         self.user_repo = user_repo
@@ -48,6 +55,7 @@ class AnalyticsService:
         self.message_repo = message_repo
         self.cluster_weekly_stats_repo = cluster_weekly_stats_repo
         self.weekly_improvements_repo = weekly_improvements_repo
+        self.chroma_material_store = chroma_material_store
 
     def _build_improvement_candidates(
         self,
@@ -89,6 +97,134 @@ class AnalyticsService:
             reverse=True,
         )
         return items[:5]
+
+    def _find_review_materials(
+        self,
+        *,
+        course_id: str,
+        question: str,
+    ) -> list[dict[str, Any]]:
+        if not self.chroma_material_store.enabled or not question.strip():
+            print(
+                "[TA-BACKEND][materials][search] skipped: "
+                f"chroma_enabled={self.chroma_material_store.enabled} question_empty={not question.strip()}",
+                flush=True,
+            )
+            return []
+
+        print(
+            "[TA-BACKEND][materials][search] start "
+            f"course_id={course_id} n_results=10 question={question[:120]!r}",
+            flush=True,
+        )
+        semantic_matches = self.chroma_material_store.query_relevant_chunks(
+            course_id=course_id,
+            text=question,
+            n_results=10,
+        )
+        print(
+            f"[TA-BACKEND][materials][search] chroma_results={len(semantic_matches)}",
+            flush=True,
+        )
+        candidates: list[dict[str, Any]] = []
+        for match in semantic_matches:
+            metadata = match.metadata or {}
+            print(
+                "[TA-BACKEND][materials][search] candidate "
+                f"distance={match.distance:.4f} material_id={metadata.get('material_id')} "
+                f"file={metadata.get('file_name')} page={metadata.get('page')} chunk={metadata.get('chunk_index')}",
+                flush=True,
+            )
+            material_id = str(metadata.get("material_id", "")).strip()
+            file_name = str(metadata.get("file_name", "")).strip()
+            try:
+                page = int(metadata.get("page", 0) or 0)
+            except Exception:
+                page = 0
+            if not material_id or not file_name:
+                continue
+            candidates.append(
+                {
+                    "material_id": material_id,
+                    "file_name": file_name,
+                    "page": page,
+                    "text": match.text,
+                }
+            )
+
+        if not candidates:
+            print("[TA-BACKEND][materials][search] no valid Chroma candidates", flush=True)
+            return []
+
+        print(
+            f"[TA-BACKEND][materials][search] candidates={len(candidates)}; running Cohere rerank",
+            flush=True,
+        )
+        reranked = rerank_material_chunks(
+            question=question,
+            chunks=candidates,
+        )
+        selected: list[dict[str, Any]] = []
+        seen: set[tuple[str, int]] = set()
+        for item in reranked:
+            score = float(item.get("rerank_score", 0.0))
+            if score <= settings.chroma_material_rerank_score_threshold:
+                print(
+                    "[TA-BACKEND][materials][select] rejected "
+                    f"score={score:.4f} threshold>{settings.chroma_material_rerank_score_threshold} "
+                    f"file={item.get('file_name')} page={item.get('page')}",
+                    flush=True,
+                )
+                continue
+            key = (str(item.get("material_id", "")), int(item.get("page", 0) or 0))
+            if key in seen:
+                continue
+            seen.add(key)
+            selected.append(
+                {
+                    "material_id": key[0],
+                    "file_name": str(item.get("file_name", "")),
+                    "page": key[1],
+                    "score": score,
+                }
+            )
+            print(
+                "[TA-BACKEND][materials][select] accepted "
+                f"score={score:.4f} file={item.get('file_name')} page={key[1]} material_id={key[0]}",
+                flush=True,
+            )
+            if len(selected) >= MAX_REVIEW_MATERIALS_PER_IMPROVEMENT:
+                break
+        print(f"[TA-BACKEND][materials][select] selected_count={len(selected)}", flush=True)
+        return selected
+
+    def _find_review_materials_by_cluster(
+        self,
+        *,
+        course_id: str,
+        candidates: list[dict[str, Any]],
+    ) -> dict[str, list[dict[str, Any]]]:
+        review_materials_by_cluster: dict[str, list[dict[str, Any]]] = {}
+        if not candidates:
+            return review_materials_by_cluster
+
+        def run_one(item: dict[str, Any]) -> tuple[str, list[dict[str, Any]]]:
+            cluster_id = str(item.get("cluster_id", ""))
+            try:
+                materials = self._find_review_materials(
+                    course_id=course_id,
+                    question=str(item.get("question", "")),
+                )
+            except Exception as exc:  # noqa: BLE001
+                print(f"[TA-BACKEND][improvements] material rerank failed cluster={cluster_id}: {exc}", flush=True)
+                materials = []
+            return cluster_id, materials
+
+        max_workers = min(5, len(candidates))
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            for cluster_id, materials in executor.map(run_one, candidates):
+                review_materials_by_cluster[cluster_id] = materials
+        return review_materials_by_cluster
 
     def get_course_questions_analytics(
         self,
@@ -179,24 +315,36 @@ class AnalyticsService:
                 week_start=improvement_week_start,
             )
             stored_improvements = (weekly_doc or {}).get("improvements", []) or []
-            has_missing_fields = any(
-                not str(item.get("problem", "")).strip()
-                or not str(item.get("title", "")).strip()
-                or not str(item.get("solution", "")).strip()
-                for item in stored_improvements
-                if isinstance(item, dict)
-            )
-            can_reuse = bool(
-                weekly_doc
-                and weekly_doc.get("question_fingerprint") == fingerprint
-                and not has_missing_fields
-            )
+            fingerprint_unchanged = bool(weekly_doc and weekly_doc.get("question_fingerprint") == fingerprint)
 
-            if can_reuse:
-                improvements_payload = stored_improvements
+            if fingerprint_unchanged:
+                improvements_payload = [
+                    {
+                        **item,
+                        "review_materials": item.get("review_materials", []) if isinstance(item, dict) else [],
+                    }
+                    for item in stored_improvements
+                    if isinstance(item, dict)
+                ]
             else:
                 try:
-                    improvements_payload, _ = generate_weekly_improvements(candidates)
+                    with ThreadPoolExecutor(max_workers=2) as executor:
+                        improvements_future = executor.submit(generate_weekly_improvements, candidates)
+                        materials_future = executor.submit(
+                            self._find_review_materials_by_cluster,
+                            course_id=payload.course_id,
+                            candidates=candidates,
+                        )
+                        improvements_payload, _ = improvements_future.result()
+                        review_materials_by_cluster = materials_future.result()
+
+                    improvements_payload = [
+                        {
+                            **item,
+                            "review_materials": review_materials_by_cluster.get(str(item.get("cluster_id", "")), []),
+                        }
+                        for item in improvements_payload
+                    ]
                     now = datetime.now(timezone.utc)
                     self.weekly_improvements_repo.upsert_for_range(
                         course_id=course_oid,
@@ -220,6 +368,16 @@ class AnalyticsService:
                 problem=str(item.get("problem", "")),
                 title=str(item.get("title", "")),
                 solution=str(item.get("solution", "")),
+                review_materials=[
+                    {
+                        "material_id": str(material.get("material_id", "")),
+                        "file_name": str(material.get("file_name", "")),
+                        "page": int(material.get("page", 0) or 0),
+                        "score": float(material.get("score", 0.0) or 0.0),
+                    }
+                    for material in (item.get("review_materials", []) or [])
+                    if isinstance(material, dict) and str(material.get("material_id", "")).strip()
+                ],
             )
             for item in improvements_payload
             if str(item.get("cluster_id", "")).strip()

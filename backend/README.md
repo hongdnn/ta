@@ -60,6 +60,7 @@ app/
 - Prints transcription + frame analysis to server logs
 - Returns transcript + frame analysis JSON response
 - `POST /api/auth/register` and `POST /api/auth/login` for account auth
+- `POST /api/course-materials` uploads professor course files to Cloudflare R2, saves metadata in MongoDB, and indexes extracted chunks into Chroma
 - Includes MongoDB schema setup for:
   - institutions
   - courses
@@ -71,6 +72,7 @@ app/
   - messages
   - clusters
   - cluster_weekly_stats
+  - course_materials
 
 ## Requirements
 
@@ -123,6 +125,14 @@ uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 - `TUTOR_MODEL` (default: `gemini-2.5-flash`)
 - `TUTOR_MAX_OUTPUT_TOKENS` (default: `2400`)
 - `AUTO_CROP_ENABLED` (default: `0`)
+- `CHROMA_ENABLED` (default: `0`)
+- `CHROMA_MATERIAL_RERANK_SCORE_THRESHOLD` (default: `0.8`; Cohere relevance score)
+- `CHROMA_API_KEY`, `CHROMA_TENANT`, `CHROMA_DATABASE` (required when `CHROMA_ENABLED=1`)
+- `CHROMA_SIMILARITY_THRESHOLD` (default: `0.32`)
+- `COHERE_API_KEY` (required to rerank course material references for suggested improvements)
+- `COHERE_RERANK_MODEL` (default: `rerank-v4.0-pro`)
+- `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME` (required for course material uploads)
+- `R2_PRESIGNED_URL_EXPIRES_SECONDS` (default: `900`)
 - `MONGODB_URL` (required for `init-mongo`)
 - `MONGODB_DB_NAME` (default: `ta`)
 - `MONGO_INIT_ON_STARTUP` (default: `0`; set `1` to auto-init schema on API startup)

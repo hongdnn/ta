@@ -1,8 +1,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Sparkles, ArrowUpCircle, ArrowRightCircle, ArrowDownCircle } from "lucide-react";
+import { Sparkles, ArrowUpCircle, ArrowRightCircle, ArrowDownCircle, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
+import { fetchCourseMaterialViewUrl } from "@web/api/courseMaterials";
 
 const priorityConfig = {
   high: {
@@ -31,6 +32,12 @@ type ImprovementItem = {
   problem: string;
   title: string;
   solution: string;
+  review_materials?: Array<{
+    material_id: string;
+    file_name: string;
+    page: number;
+    score: number;
+  }>;
 };
 
 function getPriorityByIndex(index: number, total: number): "high" | "medium" | "low" {
@@ -63,6 +70,18 @@ export function LessonImprovementsPanel({
   isLoading?: boolean;
   improvements?: ImprovementItem[];
 }) {
+  const handleOpenMaterial = async (material: NonNullable<ImprovementItem["review_materials"]>[number]) => {
+    try {
+      const url = await fetchCourseMaterialViewUrl(material.material_id);
+      const targetUrl = material.file_name.toLowerCase().endsWith(".pdf") && material.page > 0
+        ? `${url}#page=${material.page}`
+        : url;
+      window.open(targetUrl, "_blank", "noopener,noreferrer");
+    } catch {
+      // Keep this panel quiet; failed view links should not disturb the dashboard.
+    }
+  };
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -120,6 +139,23 @@ export function LessonImprovementsPanel({
                     <p className="text-sm text-muted-foreground leading-relaxed">
                       {[s.problem, s.solution].filter(Boolean).join(" ").trim()}
                     </p>
+                    {s.review_materials && s.review_materials.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {s.review_materials.slice(0, 3).map((material) => (
+                          <button
+                            key={`${s.cluster_id}-${material.material_id}-${material.page}`}
+                            type="button"
+                            onClick={() => void handleOpenMaterial(material)}
+                            className="inline-flex items-center gap-1.5 rounded-full border border-border/80 bg-background/40 px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:bg-primary/10 hover:text-foreground"
+                            title="Open course material"
+                          >
+                            <FileText className="h-3 w-3" />
+                            {material.file_name}
+                            {material.page > 0 ? `, page ${material.page}` : ""}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

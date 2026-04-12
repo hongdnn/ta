@@ -28,6 +28,13 @@ class PastQuestionItem(BaseModel):
     asks_total_until_now: int
 
 
+class ReviewMaterialItem(BaseModel):
+    material_id: str
+    file_name: str
+    page: int
+    score: float
+
+
 class WeeklyImprovementItem(BaseModel):
     cluster_id: str
     question: str
@@ -37,6 +44,7 @@ class WeeklyImprovementItem(BaseModel):
     problem: str
     title: str
     solution: str
+    review_materials: list[ReviewMaterialItem] = Field(default_factory=list)
 
 
 class CourseQuestionsAnalyticsResponse(BaseModel):

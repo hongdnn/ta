@@ -3,7 +3,8 @@ from __future__ import annotations
 import json
 import os
 import time
-from typing import TypedDict
+from collections.abc import Iterator
+from typing import Any, TypedDict
 
 import google.genai as genai
 from google.genai import types
@@ -176,10 +177,9 @@ def context_node(state: AssistState) -> AssistState:
     }
 
 
-def tutor_node(state: AssistState) -> AssistState:
+def _build_tutor_request(state: AssistState) -> tuple[str, list[object], types.GenerateContentConfig]:
     tutor_model = os.getenv("TUTOR_MODEL", "gemini-2.5-flash").strip()
     tutor_max_output_tokens = int(os.getenv("TUTOR_MAX_OUTPUT_TOKENS", "2400").strip())
-    client = _get_vertex_client()
 
     session = SESSION_MEMORY.get(state["session_id"], {"history": [], "updated_at": 0.0})
     history = session.get("history", [])[-4:]
@@ -191,12 +191,12 @@ def tutor_node(state: AssistState) -> AssistState:
     user_question = user_text or "Explain this captured lesson moment."
     shared_context = (
         f"Recent QA history:\n{history_text}\n\n"
-        f"Transcript:\n{transcript or '(empty)'}\n\n"
+        f"Lecture/video audio:\n{transcript or '(empty)'}\n\n"
         f"User question:\n{user_question}"
     )
     prompt = (
         "You are a teaching assistant.\n"
-        "Analyze the student's current screen, transcript, recent history, and question together.\n"
+        "Analyze the student's current screen, lecture/video audio, recent history, and question together.\n"
         "Return JSON only. Do not use markdown.\n"
         "Return exactly this schema:\n"
         "{\n"
@@ -205,24 +205,34 @@ def tutor_node(state: AssistState) -> AssistState:
         '  "answer": "plain text answer for the student"\n'
         "}\n\n"
         "Intent definitions:\n"
-        "- context_only: The user is asking about the current screen, current explanation, visible work, transcript, or a short follow-up that depends on current/prior context.\n"
+        "- context_only: The user is asking about the current screen, current explanation, visible work, lecture/video audio, or a short follow-up that depends on current/prior context.\n"
         "- theory_only: The user is asking a standalone concept question.\n"
         "- context_plus_theory: The user is asking a concept question and also referencing the current context.\n\n"
+        "Intent rules:\n"
+        "1) Classify intent from what the user is asking, not from how much theory your answer will contain.\n"
+        "2) If the user request is a short follow-up or refinement that depends on current/prior context, choose context_only.\n"
+        "3) Examples of context-dependent follow-ups include: explain this, explain deeper, explain simpler, summarize, what should I focus on, give me a hint.\n"
+        "4) Choose theory_only only when the user asks a standalone concept question that does not depend on the current screen, audio, or recent conversation.\n"
+        "5) Choose context_plus_theory only when the user asks about a concept and also needs the current screen, audio, or recent conversation to answer it well.\n\n"
         "Activity type definitions:\n"
         "- lecture: The student is studying lecture or course material, such as a lecture slide, video, textbook, notes, worked example, or live class.\n"
         "- assignment: The student is actively working on homework or an assignment, such as solving a problem, writing code, drafting an answer, or reviewing their own solution.\n\n"
         "Answer rules:\n"
-        "1) Use the image and transcript when they help the answer. If the image is relevant, use its visible evidence directly.\n"
-        "2) If activity_type is lecture, write a natural teaching explanation in 100-200 words.\n"
-        "3) For lecture, if the question is specific, answer it first, then connect it to the current lesson moment when useful.\n"
-        "4) For lecture, if the question is empty or generic, summarize what is being taught now, what concept is visible, and what the student should focus on next.\n"
-        "5) If activity_type is assignment, write a natural teaching explanation in 60-140 words.\n"
-        "6) For assignment, do not give the final answer, finished code, completed proof, completed diagram, final equation, final regular expression, or final written response.\n"
-        "7) For assignment, do not certify correctness. Never say the final answer is correct, incorrect, right, wrong, ready to submit, or not ready to submit, even if the student asks.\n"
-        "8) For assignment, analyze what the student appears to be doing and respond to their current progress.\n"
-        "9) For assignment, if the student is stuck, give one small hint or one small next step, not the full solution.\n"
-        "10) For assignment, if the student appears to have completed the work, encourage a self-check or testing step instead of confirming whether it is correct.\n"
-        "11) If there is no useful image or transcript context and the user asks about the current screen or current explanation, say briefly that you need a clearer capture.\n\n"
+        "1) Use the screen and lecture/video audio when they help the student understand the answer.\n"
+        "2) If the user's request is generic or context-dependent, treat the current screen and lecture/video audio as the main subject of the request.\n"
+        "3) If the screen or lecture/video audio contains relevant evidence, mention that evidence naturally and use it in the explanation.\n"
+        "4) When referencing audio, describe the source naturally: refer to the instructor/speaker when someone is teaching or presenting, or to the video/narration when it is clearly a recorded video. Do not describe audio as backend data.\n"
+        "5) Do not force a screen or audio reference when the context is weak, noisy, or unrelated.\n"
+        "6) If activity_type is lecture, write a natural teaching explanation in 100-250 words.\n"
+        "7) For lecture, answer the user's question directly, but do not stop at the conclusion. Explain the reasoning clearly.\n"
+        "8) For lecture, if the question is empty or generic, summarize what is being taught now, what concept is visible, and what the student should focus on next.\n"
+        "9) If activity_type is assignment, write a natural teaching explanation in 60-140 words.\n"
+        "10) For assignment, do not give the final answer, finished code, completed proof, completed diagram, final equation, final regular expression, or final written response.\n"
+        "11) For assignment, do not certify correctness. Never say the final answer is correct, incorrect, right, wrong, ready to submit, or not ready to submit, even if the student asks.\n"
+        "12) For assignment, analyze what the student appears to be doing and respond to their current progress.\n"
+        "13) For assignment, if the student is stuck, give one small hint or one small next step, not the full solution.\n"
+        "14) For assignment, if the student appears to have completed the work, encourage a self-check or testing step instead of confirming whether it is correct.\n"
+        "15) If there is no useful screen or audio context and the user asks about the current screen or current explanation, say briefly that you need a clearer capture.\n\n"
         f"{shared_context}"
     )
 
@@ -230,15 +240,17 @@ def tutor_node(state: AssistState) -> AssistState:
     if frame_bytes:
         contents.insert(0, types.Part.from_bytes(data=frame_bytes, mime_type="image/png"))
 
-    response = client.models.generate_content(
-        model=tutor_model,
-        contents=contents,
-        config=types.GenerateContentConfig(
+    return (
+        tutor_model,
+        contents,
+        types.GenerateContentConfig(
             temperature=0.2,
             max_output_tokens=tutor_max_output_tokens,
         ),
     )
-    raw_text = (response.text or "").strip()
+
+
+def _normalize_tutor_payload(raw_text: str, *, user_text: str) -> AssistState:
     payload = _extract_json_object(raw_text)
     intent = str(payload.get("intent", "")).strip().lower()
     if intent not in {"context_only", "theory_only", "context_plus_theory"}:
@@ -248,12 +260,7 @@ def tutor_node(state: AssistState) -> AssistState:
         frame_activity_type = "lecture"
     answer = str(payload.get("answer", "")).strip()
     if not answer:
-        answer = raw_text
-    print(
-        f"[TA-ASSIST][tutor] model={tutor_model} answer_len={len(answer)} "
-        f"intent={intent} activity_type={frame_activity_type}",
-        flush=True,
-    )
+        answer = raw_text.strip()
     return {
         "intent": intent,
         "route": intent,
@@ -261,6 +268,135 @@ def tutor_node(state: AssistState) -> AssistState:
         "frame_analysis": "",
         "answer": answer,
     }
+
+
+def tutor_node(state: AssistState) -> AssistState:
+    tutor_model, contents, config = _build_tutor_request(state)
+    client = _get_vertex_client()
+    response = client.models.generate_content(
+        model=tutor_model,
+        contents=contents,
+        config=config,
+    )
+    raw_text = (response.text or "").strip()
+    result = _normalize_tutor_payload(raw_text, user_text=(state.get("user_text") or "").strip())
+    print(
+        f"[TA-ASSIST][tutor] model={tutor_model} answer_len={len(result.get('answer', ''))} "
+        f"intent={result.get('intent')} activity_type={result.get('frame_activity_type')}",
+        flush=True,
+    )
+    return result
+
+
+class _JsonAnswerStreamExtractor:
+    def __init__(self) -> None:
+        self._prefix = '"answer"'
+        self._prefix_index = 0
+        self._waiting_for_colon = False
+        self._waiting_for_quote = False
+        self._in_answer = False
+        self._escape = False
+        self._unicode_buffer = ""
+        self.done = False
+
+    def feed(self, text: str) -> str:
+        output: list[str] = []
+        for ch in text:
+            if self.done:
+                continue
+            if self._in_answer:
+                if self._unicode_buffer:
+                    self._unicode_buffer += ch
+                    if len(self._unicode_buffer) == 4:
+                        try:
+                            output.append(chr(int(self._unicode_buffer, 16)))
+                        except ValueError:
+                            pass
+                        self._unicode_buffer = ""
+                        self._escape = False
+                    continue
+                if self._escape:
+                    if ch == "u":
+                        self._unicode_buffer = ""
+                    else:
+                        output.append(
+                            {
+                                "n": "\n",
+                                "r": "\r",
+                                "t": "\t",
+                                '"': '"',
+                                "\\": "\\",
+                                "/": "/",
+                                "b": "\b",
+                                "f": "\f",
+                            }.get(ch, ch)
+                        )
+                        self._escape = False
+                    continue
+                if ch == "\\":
+                    self._escape = True
+                    continue
+                if ch == '"':
+                    self.done = True
+                    continue
+                output.append(ch)
+                continue
+
+            if self._waiting_for_quote:
+                if ch.isspace():
+                    continue
+                if ch == '"':
+                    self._in_answer = True
+                else:
+                    self._waiting_for_quote = False
+                continue
+
+            if self._waiting_for_colon:
+                if ch.isspace():
+                    continue
+                if ch == ":":
+                    self._waiting_for_quote = True
+                else:
+                    self._waiting_for_colon = False
+                continue
+
+            expected = self._prefix[self._prefix_index]
+            if ch == expected:
+                self._prefix_index += 1
+                if self._prefix_index == len(self._prefix):
+                    self._waiting_for_colon = True
+                    self._prefix_index = 0
+            else:
+                self._prefix_index = 1 if ch == self._prefix[0] else 0
+        return "".join(output)
+
+
+def stream_tutor_node(state: AssistState) -> Iterator[dict[str, Any]]:
+    tutor_model, contents, config = _build_tutor_request(state)
+    client = _get_vertex_client()
+    extractor = _JsonAnswerStreamExtractor()
+    raw_parts: list[str] = []
+    for chunk in client.models.generate_content_stream(
+        model=tutor_model,
+        contents=contents,
+        config=config,
+    ):
+        text = chunk.text or ""
+        if not text:
+            continue
+        raw_parts.append(text)
+        delta = extractor.feed(text)
+        if delta:
+            yield {"type": "answer_delta", "text": delta}
+
+    raw_text = "".join(raw_parts).strip()
+    result = _normalize_tutor_payload(raw_text, user_text=(state.get("user_text") or "").strip())
+    print(
+        f"[TA-ASSIST][tutor-stream] model={tutor_model} answer_len={len(result.get('answer', ''))} "
+        f"intent={result.get('intent')} activity_type={result.get('frame_activity_type')}",
+        flush=True,
+    )
+    yield {"type": "final_state", "state": result}
 
 
 def save_memory_node(state: AssistState) -> AssistState:
@@ -320,3 +456,33 @@ def run_assist(
         }
     )
     return result
+
+
+def run_assist_stream(
+    *,
+    session_id: str,
+    user_text: str,
+    capture_triggered: bool,
+    audio_tmp_path: str | None,
+    frame_bytes: bytes | None,
+) -> Iterator[dict[str, Any]]:
+    state: AssistState = {
+        "session_id": session_id,
+        "user_text": user_text,
+        "capture_triggered": capture_triggered,
+        "audio_tmp_path": audio_tmp_path,
+        "frame_bytes": frame_bytes,
+    }
+    context = context_node(state)
+    state.update(context)
+    yield {"type": "context", "state": context}
+
+    final_state: AssistState = {}
+    for event in stream_tutor_node(state):
+        if event.get("type") == "final_state":
+            final_state = event.get("state") or {}
+            state.update(final_state)
+        else:
+            yield event
+    save_memory_node(state)
+    yield {"type": "final_state", "state": state}

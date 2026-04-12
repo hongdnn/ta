@@ -46,11 +46,18 @@ class Settings:
     jwt_exp_minutes: int = _env_int("JWT_EXP_MINUTES", 10080)  # 7 days
     mongo_init_on_startup: bool = _env("MONGO_INIT_ON_STARTUP", "0") == "1"
     chroma_enabled: bool = _env("CHROMA_ENABLED", "0") == "1"
-    chroma_collection_name: str = _env("CHROMA_COLLECTION", "ta_course_clusters")
     chroma_api_key: str = _env("CHROMA_API_KEY", "")
     chroma_tenant: str = _env("CHROMA_TENANT", "")
     chroma_database: str = _env("CHROMA_DATABASE", "")
     chroma_similarity_threshold: float = 0.2
+    chroma_material_rerank_score_threshold: float = _env_float("CHROMA_MATERIAL_RERANK_SCORE_THRESHOLD", 0.8)
+    cohere_api_key: str = _env("COHERE_API_KEY", "")
+    cohere_rerank_model: str = _env("COHERE_RERANK_MODEL", "rerank-v4.0-pro")
+    r2_account_id: str = _env("R2_ACCOUNT_ID", "")
+    r2_access_key_id: str = _env("R2_ACCESS_KEY_ID", "")
+    r2_secret_access_key: str = _env("R2_SECRET_ACCESS_KEY", "")
+    r2_bucket_name: str = _env("R2_BUCKET_NAME", "")
+    r2_presigned_url_expires_seconds: int = _env_int("R2_PRESIGNED_URL_EXPIRES_SECONDS", 900)
 
     @property
     def cors_origins(self) -> list[str]:

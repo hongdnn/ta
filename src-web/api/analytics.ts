@@ -30,6 +30,12 @@ export type CourseQuestionsAnalyticsResponse = {
     problem: string;
     title: string;
     solution: string;
+    review_materials: Array<{
+      material_id: string;
+      file_name: string;
+      page: number;
+      score: number;
+    }>;
   }>;
 };
 

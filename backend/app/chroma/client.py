@@ -7,7 +7,11 @@ from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
 from app.core.config import settings
 
 
-def get_chroma_collection() -> Collection | None:
+CLUSTER_COLLECTION_NAME = "course_clusters"
+MATERIAL_COLLECTION_NAME = "course_materials"
+
+
+def _get_chroma_collection(*, name: str, description: str) -> Collection | None:
     if not settings.chroma_enabled:
         return None
 
@@ -27,7 +31,20 @@ def get_chroma_collection() -> Collection | None:
     )
 
     return client.get_or_create_collection(
-        name=settings.chroma_collection_name,
+        name=name,
         embedding_function=embedding_function,
-        metadata={"description": "TA course question clusters"},
+    )
+
+
+def get_chroma_collection() -> Collection | None:
+    return _get_chroma_collection(
+        name=CLUSTER_COLLECTION_NAME,
+        description="TA course question clusters",
+    )
+
+
+def get_chroma_material_collection() -> Collection | None:
+    return _get_chroma_collection(
+        name=MATERIAL_COLLECTION_NAME,
+        description="TA course materials",
     )

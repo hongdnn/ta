@@ -37,6 +37,7 @@ VALIDATOR = {
                         "problem",
                         "title",
                         "solution",
+                        "review_materials",
                     ],
                     "properties": {
                         "cluster_id": {"bsonType": "string"},
@@ -47,6 +48,19 @@ VALIDATOR = {
                         "problem": {"bsonType": "string"},
                         "title": {"bsonType": "string"},
                         "solution": {"bsonType": "string"},
+                        "review_materials": {
+                            "bsonType": "array",
+                            "items": {
+                                "bsonType": "object",
+                                "required": ["material_id", "file_name", "page", "score"],
+                                "properties": {
+                                    "material_id": {"bsonType": "string"},
+                                    "file_name": {"bsonType": "string"},
+                                    "page": {"bsonType": "int", "minimum": 0},
+                                    "score": {"bsonType": ["double", "int"]},
+                                },
+                            },
+                        },
                     },
                 },
             },

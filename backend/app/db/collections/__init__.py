@@ -4,6 +4,7 @@ from . import (
     cluster,
     cluster_weekly_stats,
     course,
+    course_material,
     institution,
     message,
     professor_course,
@@ -17,6 +18,7 @@ from . import (
 MODEL_DEFS = [
     institution,
     course,
+    course_material,
     user,
     user_institution,
     student_course,

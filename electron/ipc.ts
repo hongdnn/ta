@@ -106,7 +106,7 @@ export function setupIpcHandlers() {
   ipcMain.handle('ta:get-settings', () => {
     return readJSON('settings.json', {
       hotkey: 'Ctrl+Shift+Space',
-      captureDuration: 20,
+      captureDuration: 30,
       includeAudio: true,
       compactMiniPanel: false,
       localOnly: true,

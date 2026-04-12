@@ -9,6 +9,7 @@ from app.routes.assist import router as assist_router
 from app.routes.analytics import router as analytics_router
 from app.routes.auth import router as auth_router
 from app.routes.catalog import router as catalog_router
+from app.routes.course_materials import router as course_materials_router
 from app.routes.session import router as session_router
 from app.core.config import settings
 from app.db.mongo_schema import init_mongo_schema
@@ -26,6 +27,7 @@ app.add_middleware(
 
 app.include_router(auth_router)
 app.include_router(catalog_router)
+app.include_router(course_materials_router)
 app.include_router(session_router)
 app.include_router(assist_router)
 app.include_router(analytics_router)

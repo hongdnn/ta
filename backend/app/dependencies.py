@@ -3,14 +3,16 @@ from __future__ import annotations
 from fastapi import Depends, Header, HTTPException
 from fastapi import status as http_status
 
-from app.chroma.client import get_chroma_collection
+from app.chroma.client import get_chroma_collection, get_chroma_material_collection
 from app.chroma.cluster_store import ChromaClusterStore
+from app.chroma.material_store import ChromaMaterialStore
 from app.core.config import settings
 from app.core.security import decode_access_token
 from app.db.client import get_db
 from app.repositories.cluster_repository import ClusterRepository
 from app.repositories.cluster_weekly_stats_repository import ClusterWeeklyStatsRepository
 from app.repositories.course_repository import CourseRepository
+from app.repositories.course_material_repository import CourseMaterialRepository
 from app.repositories.institution_repository import InstitutionRepository
 from app.repositories.message_repository import MessageRepository
 from app.repositories.session_repository import SessionRepository
@@ -21,7 +23,9 @@ from app.services.assist_service import AssistService
 from app.services.analytics_service import AnalyticsService
 from app.services.auth_service import AuthService
 from app.services.catalog_service import CatalogService
+from app.services.course_material_service import CourseMaterialService
 from app.services.session_service import SessionService
+from app.file_storage.r2 import R2Storage
 
 
 def get_auth_context(authorization: str | None = Header(default=None)) -> AuthContext:
@@ -61,6 +65,10 @@ def get_course_repository() -> CourseRepository:
     return CourseRepository(get_db())
 
 
+def get_course_material_repository() -> CourseMaterialRepository:
+    return CourseMaterialRepository(get_db())
+
+
 def get_message_repository() -> MessageRepository:
     return MessageRepository(get_db())
 
@@ -86,6 +94,14 @@ def get_chroma_cluster_store() -> ChromaClusterStore:
         get_chroma_collection(),
         similarity_threshold=settings.chroma_similarity_threshold,
     )
+
+
+def get_chroma_material_store() -> ChromaMaterialStore:
+    return ChromaMaterialStore(get_chroma_material_collection())
+
+
+def get_r2_storage() -> R2Storage:
+    return R2Storage.from_settings()
 
 
 def get_auth_service(
@@ -136,6 +152,7 @@ def get_analytics_service(
     message_repo: MessageRepository = Depends(get_message_repository),
     cluster_weekly_stats_repo: ClusterWeeklyStatsRepository = Depends(get_cluster_weekly_stats_repository),
     weekly_improvements_repo: WeeklyImprovementsRepository = Depends(get_weekly_improvements_repository),
+    chroma_material_store: ChromaMaterialStore = Depends(get_chroma_material_store),
 ) -> AnalyticsService:
     return AnalyticsService(
         course_repo=course_repo,
@@ -144,4 +161,21 @@ def get_analytics_service(
         message_repo=message_repo,
         cluster_weekly_stats_repo=cluster_weekly_stats_repo,
         weekly_improvements_repo=weekly_improvements_repo,
+        chroma_material_store=chroma_material_store,
+    )
+
+
+def get_course_material_service(
+    course_material_repo: CourseMaterialRepository = Depends(get_course_material_repository),
+    course_repo: CourseRepository = Depends(get_course_repository),
+    user_repo: UserRepository = Depends(get_user_repository),
+    r2_storage: R2Storage = Depends(get_r2_storage),
+    chroma_material_store: ChromaMaterialStore = Depends(get_chroma_material_store),
+) -> CourseMaterialService:
+    return CourseMaterialService(
+        course_material_repo=course_material_repo,
+        course_repo=course_repo,
+        user_repo=user_repo,
+        r2_storage=r2_storage,
+        chroma_material_store=chroma_material_store,
     )
