@@ -51,7 +51,7 @@ export default function LoginPage() {
             <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
               <GraduationCap className="h-5 w-5 text-primary-foreground" />
             </div>
-            <span className="text-xl font-semibold text-foreground">Lecture Lens</span>
+            <span className="text-xl font-semibold text-foreground">WeMee</span>
           </Link>
           <h1 className="text-2xl font-semibold text-foreground">Welcome back</h1>
           <p className="text-sm text-muted-foreground mt-1">

@@ -1,5 +1,5 @@
 {
-  "name": "ta-frontend",
+  "name": "wemee-desktop",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -98,8 +98,8 @@
     "wait-on": "^9.0.4"
   },
   "build": {
-    "appId": "com.ta.desktop",
-    "productName": "TA",
+    "appId": "com.wemee.desktop",
+    "productName": "WeMee",
     "files": [
       "dist/**/*",
       "dist-electron/**/*"

@@ -150,7 +150,7 @@ def rerank_material_chunks(
 
     api_key = os.getenv("COHERE_API_KEY", "").strip()
     if not api_key:
-        print("[TA-BACKEND][materials][cohere] skipped: COHERE_API_KEY is missing", flush=True)
+        print("[BACKEND][materials][cohere] skipped: COHERE_API_KEY is missing", flush=True)
         return []
     model = os.getenv("COHERE_RERANK_MODEL", "rerank-v4.0-pro").strip() or "rerank-v4.0-pro"
     documents = [
@@ -167,7 +167,7 @@ def rerank_material_chunks(
     )
     try:
         print(
-            f"[TA-BACKEND][materials][cohere] rerank start model={model} candidates={len(documents)} "
+            f"[BACKEND][materials][cohere] rerank start model={model} candidates={len(documents)} "
             f"question={question[:120]!r}",
             flush=True,
         )
@@ -188,7 +188,7 @@ def rerank_material_chunks(
         response.raise_for_status()
         rows = response.json().get("results", [])
     except Exception as exc:  # noqa: BLE001
-        print(f"[TA-BACKEND][materials][cohere] rerank failed: {exc}", flush=True)
+        print(f"[BACKEND][materials][cohere] rerank failed: {exc}", flush=True)
         return []
 
     scored: list[dict[str, Any]] = []
@@ -207,7 +207,7 @@ def rerank_material_chunks(
     scored.sort(key=lambda item: float(item.get("rerank_score", 0.0)), reverse=True)
     for item in scored:
         print(
-            "[TA-BACKEND][materials][cohere] "
+            "[BACKEND][materials][cohere] "
             f"score={float(item.get('rerank_score', 0.0)):.4f} "
             f"file={item.get('file_name')} page={item.get('page')}",
             flush=True,

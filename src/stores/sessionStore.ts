@@ -190,7 +190,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       }
     } catch (error) {
       set({ bufferStatus: 'error', lastCaptureReason: 'Failed to start audio buffer.' });
-      console.error('[TA] Failed to start audio buffer', error);
+      console.error('[WeMee] Failed to start audio buffer', error);
       logToTerminal('error', 'Failed to start audio buffer', error);
     }
   },

@@ -17,7 +17,7 @@ def _get_chroma_collection(*, name: str, description: str) -> Collection | None:
 
     if not (settings.chroma_api_key and settings.chroma_tenant and settings.chroma_database):
         print(
-            "[TA-BACKEND][chroma] CHROMA_ENABLED=1 but cloud credentials are incomplete; "
+            "[BACKEND][chroma] CHROMA_ENABLED=1 but cloud credentials are incomplete; "
             "expected CHROMA_API_KEY, CHROMA_TENANT, CHROMA_DATABASE",
             flush=True,
         )
@@ -39,12 +39,12 @@ def _get_chroma_collection(*, name: str, description: str) -> Collection | None:
 def get_chroma_collection() -> Collection | None:
     return _get_chroma_collection(
         name=CLUSTER_COLLECTION_NAME,
-        description="TA course question clusters",
+        description="course question clusters",
     )
 
 
 def get_chroma_material_collection() -> Collection | None:
     return _get_chroma_collection(
         name=MATERIAL_COLLECTION_NAME,
-        description="TA course materials",
+        description="course materials",
     )

@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from 'react-router-dom';
-import { Home, Radio, Clock, Settings } from 'lucide-react';
+import { GraduationCap, Home, Radio, Clock, Settings } from 'lucide-react';
 import { useSessionStore } from '@/stores/sessionStore';
 import { cn } from '@/lib/utils';
 
@@ -17,8 +17,8 @@ export function AppSidebar() {
 
   return (
     <div className="flex flex-col w-16 bg-sidebar border-r border-sidebar-border items-center py-4 gap-1">
-      <div className="mb-4 w-9 h-9 rounded-lg bg-primary flex items-center justify-center font-bold text-primary-foreground text-sm">
-        TA
+      <div className="mb-4 w-9 h-9 rounded-lg bg-primary flex items-center justify-center">
+        <GraduationCap size={19} className="text-primary-foreground" />
       </div>
 
       <nav className="flex flex-col gap-1 flex-1">

@@ -1,6 +1,6 @@
 # backend
 
-FastAPI backend for TA capture ingestion and STT, with MongoDB schema initializer.
+FastAPI backend for WeMee capture ingestion and STT, with MongoDB schema initializer.
 
 ## Project Structure
 
@@ -92,7 +92,7 @@ cp .env.example .env
 ## Run
 
 ```bash
-uv run ta-backend
+uv run backend
 ```
 
 ## Initialize Mongo schema
@@ -100,7 +100,7 @@ uv run ta-backend
 Set `MONGODB_URL` and `MONGODB_DB_NAME` in `.env`, then run:
 
 ```bash
-uv run ta-backend init-mongo
+uv run backend init-mongo
 ```
 
 This creates/updates collections, JSON-schema validators, and indexes.

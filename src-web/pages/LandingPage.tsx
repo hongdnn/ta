@@ -30,7 +30,7 @@ export default function LandingPage() {
             <div className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center">
               <GraduationCap className="h-5 w-5 text-primary-foreground" />
             </div>
-            <span className="text-lg font-semibold">Lecture Lens</span>
+            <span className="text-lg font-semibold">WeMee</span>
           </div>
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="sm" asChild>
@@ -51,16 +51,12 @@ export default function LandingPage() {
 
       {/* Hero */}
       <section className="max-w-6xl mx-auto px-6 py-24 text-center">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-border bg-secondary/50 text-sm text-muted-foreground mb-6">
-          <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-          Built for professors &amp; instructors
-        </div>
         <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight leading-tight max-w-3xl mx-auto">
           Understand what your
           <span className="text-primary"> students struggle with</span>
         </h1>
         <p className="mt-6 text-lg text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-          Lecture Lens analyzes student questions in real-time, surfaces learning gaps,
+          WeMee analyzes student questions in real-time, surfaces learning gaps,
           and gives you actionable suggestions to improve your teaching — all in one dashboard.
         </p>
         <div className="mt-10 flex items-center justify-center gap-4 flex-wrap">
@@ -108,7 +104,7 @@ export default function LandingPage() {
           </div>
           <h2 className="text-2xl font-semibold mb-3">Download the Desktop App</h2>
           <p className="text-muted-foreground max-w-lg mx-auto mb-8">
-            The TA desktop app captures lectures, processes student questions in real-time,
+            The WeMee desktop app captures lectures, processes student questions in real-time,
             and syncs data to this dashboard automatically.
           </p>
           <div className="flex items-center justify-center gap-3 flex-wrap">
@@ -130,7 +126,7 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="border-t border-border/50 mt-10">
         <div className="max-w-6xl mx-auto px-6 py-6 flex items-center justify-between text-sm text-muted-foreground">
-          <span>© 2026 Lecture Lens. All rights reserved.</span>
+          <span>© 2026 WeMee. All rights reserved.</span>
           <Link to="/login" className="hover:text-foreground transition-colors">
             Professor Login →
           </Link>

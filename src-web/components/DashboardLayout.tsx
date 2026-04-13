@@ -27,7 +27,7 @@ export function DashboardLayout() {
             <GraduationCap className="h-4 w-4 text-primary-foreground" />
           </div>
           <h1 className="text-sm font-semibold text-foreground truncate">
-            Lecture Lens
+            WeMee
           </h1>
         </div>
 

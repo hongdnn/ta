@@ -1,7 +1,7 @@
 [project]
-name = "ta-backend"
+name = "backend"
 version = "0.1.0"
-description = "FastAPI backend for TA capture ingestion and STT"
+description = "FastAPI backend for WeMee capture ingestion and STT"
 requires-python = ">=3.11"
 dependencies = [
   "fastapi==0.115.8",
@@ -28,7 +28,6 @@ dependencies = [
 
 [project.scripts]
 backend = "app.cli:main"
-ta-backend = "app.cli:main"
 
 [build-system]
 requires = ["setuptools>=68.0"]

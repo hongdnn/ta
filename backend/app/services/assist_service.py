@@ -110,7 +110,7 @@ class AssistService:
 
         rms_dbfs, peak_dbfs = _wav_metrics(tmp_path)
         print(
-            f"[TA-BACKEND] audio-bytes={len(audio_bytes)} rms_dbfs={rms_dbfs} peak_dbfs={peak_dbfs}",
+            f"[BACKEND] audio-bytes={len(audio_bytes)} rms_dbfs={rms_dbfs} peak_dbfs={peak_dbfs}",
             flush=True,
         )
 
@@ -120,7 +120,7 @@ class AssistService:
             stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
             debug_path = debug_dir / f"capture-{stamp}{suffix}"
             shutil.copy2(tmp_path, debug_path)
-            print(f"[TA-BACKEND] Saved debug audio to {debug_path}", flush=True)
+            print(f"[BACKEND] Saved debug audio to {debug_path}", flush=True)
 
         return tmp_path, rms_dbfs, peak_dbfs
 
@@ -146,7 +146,7 @@ class AssistService:
         transcript: str,
         answer: str,
     ) -> None:
-        print("\n=== TA CAPTURE RECEIVED ===")
+        print("\n=== CAPTURE RECEIVED ===")
         print(f"sourceId={source_id} sourceType={source_type} courseName={course_name}")
         print(f"captureDurationSeconds={capture_duration_seconds} capturedAt={captured_at}")
         print(f"intent={intent} route={route} activityType={frame_activity_type} captureTriggered={capture_triggered}")
@@ -194,7 +194,7 @@ class AssistService:
         )
 
         if frame_bytes is not None:
-            print(f"[TA-BACKEND] frame-bytes={len(frame_bytes)}", flush=True)
+            print(f"[BACKEND] frame-bytes={len(frame_bytes)}", flush=True)
 
         try:
             result = run_assist(
@@ -257,7 +257,7 @@ class AssistService:
             audio_dbfs=rms_dbfs,
             audio_peak_dbfs=peak_dbfs,
         )
-        print("\n=== TA RESPONSE TO FRONTEND ===")
+        print("\n=== RESPONSE TO FRONTEND ===")
         print(f"ok={response_payload.ok} intent={response_payload.intent} route={response_payload.route}")
         print(f"answer_len={len(response_payload.answer)} transcript_len={len(response_payload.transcript)}")
         print(f"frame_analysis_len={len(response_payload.frame_analysis)}")
@@ -299,7 +299,7 @@ class AssistService:
         )
 
         if frame_bytes is not None:
-            print(f"[TA-BACKEND] frame-bytes={len(frame_bytes)}", flush=True)
+            print(f"[BACKEND] frame-bytes={len(frame_bytes)}", flush=True)
 
         final_state: dict = {}
         try:
@@ -379,7 +379,7 @@ class AssistService:
             audio_dbfs=rms_dbfs,
             audio_peak_dbfs=peak_dbfs,
         )
-        print("\n=== TA RESPONSE TO FRONTEND ===")
+        print("\n=== RESPONSE TO FRONTEND ===")
         print(f"ok={response_payload.ok} intent={response_payload.intent} route={response_payload.route}")
         print(f"answer_len={len(response_payload.answer)} transcript_len={len(response_payload.transcript)}")
         print(f"frame_analysis_len={len(response_payload.frame_analysis)}")
@@ -414,21 +414,21 @@ class AssistService:
             if activity_type not in {"lecture", "assignment"}:
                 activity_type = "lecture"
             if not ObjectId.is_valid(user_id):
-                print("[TA-BACKEND][persist] skipped: invalid user id for analytics", flush=True)
+                print("[BACKEND][persist] skipped: invalid user id for analytics", flush=True)
                 return
             user_oid = ObjectId(user_id)
             session_doc = self.session_repo.get_session_by_id(session_id)
             if session_doc is None:
-                print("[TA-BACKEND][persist] skipped: invalid session id for analytics", flush=True)
+                print("[BACKEND][persist] skipped: invalid session id for analytics", flush=True)
                 return
             course_id = session_doc.get("course_id")
             session_oid = session_doc.get("_id")
             session_user_id = session_doc.get("user_id")
             if not isinstance(course_id, ObjectId) or not isinstance(session_oid, ObjectId):
-                print("[TA-BACKEND][persist] skipped: malformed session document", flush=True)
+                print("[BACKEND][persist] skipped: malformed session document", flush=True)
                 return
             if not isinstance(session_user_id, ObjectId) or session_user_id != user_oid:
-                print("[TA-BACKEND][persist] skipped: session does not belong to authenticated user", flush=True)
+                print("[BACKEND][persist] skipped: session does not belong to authenticated user", flush=True)
                 return
             institution_timezone = "UTC"
             course_doc = self.course_repo.get_by_id(str(course_id))
@@ -464,7 +464,7 @@ class AssistService:
             if activity_type == "lecture" and intent != "context_only":
                 if not self.chroma_cluster_store.enabled:
                     print(
-                        f"[TA-BACKEND][persist] clustering skipped: CHROMA_ENABLED is off "
+                        f"[BACKEND][persist] clustering skipped: CHROMA_ENABLED is off "
                         f"course_id={str(course_id)}",
                         flush=True,
                     )
@@ -543,15 +543,15 @@ class AssistService:
                 )
 
                 print(
-                    f"[TA-BACKEND][persist] saved messages + cluster stats "
+                    f"[BACKEND][persist] saved messages + cluster stats "
                     f"course_id={str(course_id)} cluster_id={str(cluster_id)} asks_before_week={asks_before_week}",
                     flush=True,
                 )
             else:
                 print(
-                    f"[TA-BACKEND][persist] saved messages only (cluster skipped) "
+                    f"[BACKEND][persist] saved messages only (cluster skipped) "
                     f"course_id={str(course_id)} intent={intent} activity_type={activity_type}",
                     flush=True,
                 )
         except Exception as exc:  # noqa: BLE001
-            print(f"[TA-BACKEND][persist] failed: {exc}", flush=True)
+            print(f"[BACKEND][persist] failed: {exc}", flush=True)

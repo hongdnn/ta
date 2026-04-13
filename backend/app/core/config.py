@@ -36,7 +36,7 @@ def _env_float(name: str, default: float) -> float:
 
 @dataclass(frozen=True)
 class Settings:
-    app_name: str = "TA Backend"
+    app_name: str = "Backend"
     app_version: str = "0.1.0"
     cors_origins_raw: str = _env("CORS_ORIGINS", "http://localhost:8080")
     mongo_url: str = _env("MONGODB_URL", "")

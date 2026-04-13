@@ -87,7 +87,7 @@ def classify_intent_node(state: AssistState) -> AssistState:
             "route": "context_only",
         }
         print(
-            f"[TA-ASSIST][classify] session={state.get('session_id')} user_text=(empty) "
+            f"[ASSIST][classify] session={state.get('session_id')} user_text=(empty) "
             f"capture_triggered={capture_triggered} -> intent={result['intent']} route={result['route']}",
             flush=True,
         )
@@ -140,7 +140,7 @@ def classify_intent_node(state: AssistState) -> AssistState:
         "route": label,
     }
     print(
-        f"[TA-ASSIST][classify] session={state.get('session_id')} capture_triggered={capture_triggered} "
+        f"[ASSIST][classify] session={state.get('session_id')} capture_triggered={capture_triggered} "
         f"intent={label}",
         flush=True,
     )
@@ -158,17 +158,17 @@ def context_node(state: AssistState) -> AssistState:
         try:
             transcript, language, duration_seconds = transcribe_file(audio_tmp_path)
             print(
-                f"[TA-ASSIST][context] STT done language={language} duration={duration_seconds} "
+                f"[ASSIST][context] STT done language={language} duration={duration_seconds} "
                 f"transcript_len={len(transcript)}",
                 flush=True,
             )
         except Exception:
             transcript = ""
-            print("[TA-ASSIST][context] STT failed -> transcript empty", flush=True)
+            print("[ASSIST][context] STT failed -> transcript empty", flush=True)
 
     if state.get("frame_bytes"):
-        print("[TA-ASSIST][context] Image analysis deferred to tutor multimodal call", flush=True)
-    print("[TA-ASSIST][context] OCR skipped (disabled in current flow)", flush=True)
+        print("[ASSIST][context] Image analysis deferred to tutor multimodal call", flush=True)
+    print("[ASSIST][context] OCR skipped (disabled in current flow)", flush=True)
 
     return {
         "transcript": transcript,
@@ -281,7 +281,7 @@ def tutor_node(state: AssistState) -> AssistState:
     raw_text = (response.text or "").strip()
     result = _normalize_tutor_payload(raw_text, user_text=(state.get("user_text") or "").strip())
     print(
-        f"[TA-ASSIST][tutor] model={tutor_model} answer_len={len(result.get('answer', ''))} "
+        f"[ASSIST][tutor] model={tutor_model} answer_len={len(result.get('answer', ''))} "
         f"intent={result.get('intent')} activity_type={result.get('frame_activity_type')}",
         flush=True,
     )
@@ -392,7 +392,7 @@ def stream_tutor_node(state: AssistState) -> Iterator[dict[str, Any]]:
     raw_text = "".join(raw_parts).strip()
     result = _normalize_tutor_payload(raw_text, user_text=(state.get("user_text") or "").strip())
     print(
-        f"[TA-ASSIST][tutor-stream] model={tutor_model} answer_len={len(result.get('answer', ''))} "
+        f"[ASSIST][tutor-stream] model={tutor_model} answer_len={len(result.get('answer', ''))} "
         f"intent={result.get('intent')} activity_type={result.get('frame_activity_type')}",
         flush=True,
     )
@@ -416,7 +416,7 @@ def save_memory_node(state: AssistState) -> AssistState:
         "updated_at": time.time(),
     }
     print(
-        f"[TA-ASSIST][memory] session={sid} history_items={len(history)}",
+        f"[ASSIST][memory] session={sid} history_items={len(history)}",
         flush=True,
     )
     return {}

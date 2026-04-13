@@ -65,7 +65,7 @@ export class NativeAudioManager {
       const text = chunk.toString('utf-8').trim();
       if (text) {
         this.lastError = text;
-        console.error('[TA-NATIVE-AUDIO]', text);
+        console.error('[NATIVE-AUDIO]', text);
       }
     });
 
@@ -151,19 +151,19 @@ export class NativeAudioManager {
 
       if (event.type === 'error') {
         this.lastError = event.message;
-        console.error('[TA-NATIVE-AUDIO]', event.message);
+        console.error('[NATIVE-AUDIO]', event.message);
         return;
       }
 
       if (event.type === 'warn') {
         this.lastError = event.message;
-        console.warn('[TA-NATIVE-AUDIO]', event.message);
+        console.warn('[NATIVE-AUDIO]', event.message);
         return;
       }
 
       if (event.type === 'status') {
         if (event.message) {
-          console.log('[TA-NATIVE-AUDIO]', event.message);
+          console.log('[NATIVE-AUDIO]', event.message);
         }
         return;
       }
@@ -232,7 +232,7 @@ export class NativeAudioManager {
       });
       proc.stdout.on('data', (chunk) => {
         const text = chunk.toString('utf-8').trim();
-        if (text) console.log('[TA-NATIVE-AUDIO][BUILD]', text);
+        if (text) console.log('[NATIVE-AUDIO][BUILD]', text);
       });
       proc.on('exit', (code) => {
         if (code === 0) {
@@ -241,7 +241,7 @@ export class NativeAudioManager {
           } catch {
             // ignore chmod errors
           }
-          console.log('[TA-NATIVE-AUDIO] Helper binary compiled', outputPath);
+          console.log('[NATIVE-AUDIO] Helper binary compiled', outputPath);
           resolve();
           return;
         }

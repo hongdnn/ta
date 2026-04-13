@@ -165,7 +165,7 @@ export function AssistantPanel() {
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask TA... or press hotkey to capture this moment"
+            placeholder="Ask WeMee... or press hotkey to capture this moment"
             className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none resize-none max-h-20"
             rows={1}
           />

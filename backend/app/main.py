@@ -39,7 +39,7 @@ async def request_logger(request: Request, call_next):
     response = await call_next(request)
     elapsed_ms = int((time.perf_counter() - started) * 1000)
     print(
-        f"[TA-BACKEND] {request.method} {request.url.path} -> {response.status_code} ({elapsed_ms}ms)",
+        f"[BACKEND] {request.method} {request.url.path} -> {response.status_code} ({elapsed_ms}ms)",
         flush=True,
     )
     return response
@@ -51,11 +51,11 @@ async def on_startup():
         try:
             init_mongo_schema()
         except Exception as exc:  # noqa: BLE001
-            print(f"[TA-BACKEND] Mongo schema init failed on startup: {exc}", flush=True)
-    print("[TA-BACKEND] Startup complete - this is TA backend instance", flush=True)
+            print(f"[BACKEND] Mongo schema init failed on startup: {exc}", flush=True)
+    print("[BACKEND] Startup complete - this is backend instance", flush=True)
 
 
 @app.get("/health")
 def health():
-    print("[TA-BACKEND] Health check hit", flush=True)
-    return {"ok": True, "service": "ta-backend", "version": settings.app_version}
+    print("[BACKEND] Health check hit", flush=True)
+    return {"ok": True, "service": "backend", "version": settings.app_version}

@@ -106,14 +106,14 @@ class AnalyticsService:
     ) -> list[dict[str, Any]]:
         if not self.chroma_material_store.enabled or not question.strip():
             print(
-                "[TA-BACKEND][materials][search] skipped: "
+                "[BACKEND][materials][search] skipped: "
                 f"chroma_enabled={self.chroma_material_store.enabled} question_empty={not question.strip()}",
                 flush=True,
             )
             return []
 
         print(
-            "[TA-BACKEND][materials][search] start "
+            "[BACKEND][materials][search] start "
             f"course_id={course_id} n_results=10 question={question[:120]!r}",
             flush=True,
         )
@@ -123,14 +123,14 @@ class AnalyticsService:
             n_results=10,
         )
         print(
-            f"[TA-BACKEND][materials][search] chroma_results={len(semantic_matches)}",
+            f"[BACKEND][materials][search] chroma_results={len(semantic_matches)}",
             flush=True,
         )
         candidates: list[dict[str, Any]] = []
         for match in semantic_matches:
             metadata = match.metadata or {}
             print(
-                "[TA-BACKEND][materials][search] candidate "
+                "[BACKEND][materials][search] candidate "
                 f"distance={match.distance:.4f} material_id={metadata.get('material_id')} "
                 f"file={metadata.get('file_name')} page={metadata.get('page')} chunk={metadata.get('chunk_index')}",
                 flush=True,
@@ -153,11 +153,11 @@ class AnalyticsService:
             )
 
         if not candidates:
-            print("[TA-BACKEND][materials][search] no valid Chroma candidates", flush=True)
+            print("[BACKEND][materials][search] no valid Chroma candidates", flush=True)
             return []
 
         print(
-            f"[TA-BACKEND][materials][search] candidates={len(candidates)}; running Cohere rerank",
+            f"[BACKEND][materials][search] candidates={len(candidates)}; running Cohere rerank",
             flush=True,
         )
         reranked = rerank_material_chunks(
@@ -170,7 +170,7 @@ class AnalyticsService:
             score = float(item.get("rerank_score", 0.0))
             if score <= settings.chroma_material_rerank_score_threshold:
                 print(
-                    "[TA-BACKEND][materials][select] rejected "
+                    "[BACKEND][materials][select] rejected "
                     f"score={score:.4f} threshold>{settings.chroma_material_rerank_score_threshold} "
                     f"file={item.get('file_name')} page={item.get('page')}",
                     flush=True,
@@ -189,13 +189,13 @@ class AnalyticsService:
                 }
             )
             print(
-                "[TA-BACKEND][materials][select] accepted "
+                "[BACKEND][materials][select] accepted "
                 f"score={score:.4f} file={item.get('file_name')} page={key[1]} material_id={key[0]}",
                 flush=True,
             )
             if len(selected) >= MAX_REVIEW_MATERIALS_PER_IMPROVEMENT:
                 break
-        print(f"[TA-BACKEND][materials][select] selected_count={len(selected)}", flush=True)
+        print(f"[BACKEND][materials][select] selected_count={len(selected)}", flush=True)
         return selected
 
     def _find_review_materials_by_cluster(
@@ -216,7 +216,7 @@ class AnalyticsService:
                     question=str(item.get("question", "")),
                 )
             except Exception as exc:  # noqa: BLE001
-                print(f"[TA-BACKEND][improvements] material rerank failed cluster={cluster_id}: {exc}", flush=True)
+                print(f"[BACKEND][improvements] material rerank failed cluster={cluster_id}: {exc}", flush=True)
                 materials = []
             return cluster_id, materials
 
@@ -354,7 +354,7 @@ class AnalyticsService:
                         now=now,
                     )
                 except Exception as exc:  # noqa: BLE001
-                    print(f"[TA-BACKEND][improvements] generation failed: {exc}", flush=True)
+                    print(f"[BACKEND][improvements] generation failed: {exc}", flush=True)
                     if weekly_doc:
                         improvements_payload = weekly_doc.get("improvements", []) or []
 

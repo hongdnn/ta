@@ -33,10 +33,10 @@ export function ConsentModal() {
 
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground text-center leading-relaxed">
-            TA will access <span className="text-foreground font-medium">{selectedSource?.name}</span> and audio during this session.
+            WeMee will access <span className="text-foreground font-medium">{selectedSource?.name}</span> and audio during this session.
           </p>
           <p className="text-xs text-muted-foreground text-center">
-            TA only analyzes moments when you press Capture or send a question.
+            WeMee only analyzes moments when you press Capture or send a question.
           </p>
 
           <label className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 cursor-pointer">

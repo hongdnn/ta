@@ -1,4 +1,4 @@
-import { Play, Shield } from 'lucide-react';
+import { Play } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useSessionStore } from '@/stores/sessionStore';
 import { Navigate } from 'react-router-dom';
@@ -99,7 +99,7 @@ export default function Home() {
         <div>
           <h1 className="text-2xl font-bold text-foreground mb-2">Start a Learning Session</h1>
           <p className="text-sm text-muted-foreground">
-            Share your screen and let TA help you understand what you're learning.
+            Share your screen and let WeMee help you understand what you're learning.
           </p>
         </div>
 
@@ -165,10 +165,6 @@ export default function Home() {
           Start Session
         </Button>
 
-        <div className="flex items-start gap-2 text-xs text-muted-foreground bg-muted/50 rounded-lg p-3">
-          <Shield size={14} className="shrink-0 mt-0.5" />
-          <span>TA only analyzes moments when you press Capture or send a question.</span>
-        </div>
       </motion.div>
     </div>
   );

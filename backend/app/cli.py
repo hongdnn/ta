@@ -7,7 +7,7 @@ import uvicorn
 from .db.mongo_schema import init_mongo_schema
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="TA backend CLI")
+    parser = argparse.ArgumentParser(description="backend CLI")
     parser.add_argument(
         "command",
         nargs="?",

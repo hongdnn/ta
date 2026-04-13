@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
 /**
- * TA Preload — exposes a safe, typed API to the renderer via contextBridge.
+ * WeMee Preload — exposes a safe, typed API to the renderer via contextBridge.
  * No Node.js APIs are leaked to the renderer.
  */
 

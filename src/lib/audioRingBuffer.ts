@@ -44,7 +44,7 @@ class AudioRingBuffer {
     }
     const track = audioTracks[0];
     const trackSettings = track.getSettings ? track.getSettings() : {};
-    console.info('[TA] Desktop audio track', {
+    console.info('[WeMee] Desktop audio track', {
       label: track.label,
       enabled: track.enabled,
       muted: track.muted,
@@ -95,7 +95,7 @@ class AudioRingBuffer {
       // Lightweight debug heartbeat so we can verify audio isn't silent.
       if (now - this.lastDebugLogAt > 2000) {
         this.lastDebugLogAt = now;
-        console.info('[TA] Audio chunk level (dBFS)', dbfs.toFixed(1));
+        console.info('[WeMee] Audio chunk level (dBFS)', dbfs.toFixed(1));
       }
     };
 

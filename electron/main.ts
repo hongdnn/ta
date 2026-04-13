@@ -55,7 +55,7 @@ function createMainWindow() {
     height: 820,
     minWidth: 900,
     minHeight: 600,
-    title: 'TA',
+    title: 'WeMee',
     webPreferences: {
       preload: getPreloadPath(),
       contextIsolation: true,
@@ -134,7 +134,7 @@ function createSettingsWindow() {
     width: 560,
     height: 620,
     resizable: false,
-    title: 'TA — Settings',
+    title: 'WeMee — Settings',
     parent: mainWindow ?? undefined,
     modal: false,
     webPreferences: {
@@ -158,7 +158,7 @@ function createTray() {
   // Use a simple 16x16 icon; replace with a real icon in production
   const icon = nativeImage.createEmpty();
   tray = new Tray(icon);
-  tray.setToolTip('TA — Teaching Assistant');
+  tray.setToolTip('WeMee');
   updateTrayMenu(false);
 }
 
@@ -223,7 +223,7 @@ function setupWindowIpc() {
   ipcMain.on(
     'ta:renderer-log',
     (_e, level: 'info' | 'warn' | 'error', message: string, meta?: unknown) => {
-      const prefix = '[TA-RENDERER]';
+      const prefix = '[RENDERER]';
       if (level === 'error') {
         console.error(prefix, message, meta ?? '');
         return;

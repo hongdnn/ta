@@ -48,7 +48,7 @@ async def create_capture(
             user_id=auth.user_id,
         )
     except Exception as exc:  # noqa: BLE001
-        print(f"[TA-BACKEND] Assist pipeline failed: {exc}", flush=True)
+        print(f"[BACKEND] Assist pipeline failed: {exc}", flush=True)
         raise HTTPException(status_code=422, detail=f"Assist pipeline failed: {exc}") from exc
 
 

@@ -238,7 +238,7 @@ class CourseMaterialService:
                 updated_at=datetime.now(timezone.utc),
             )
             print(
-                f"[TA-BACKEND][materials] indexed material={material_id} chunks={len(chunks)}",
+                f"[BACKEND][materials] indexed material={material_id} chunks={len(chunks)}",
                 flush=True,
             )
         except Exception as exc:  # noqa: BLE001
@@ -247,7 +247,7 @@ class CourseMaterialService:
                 status="failed",
                 updated_at=datetime.now(timezone.utc),
             )
-            print(f"[TA-BACKEND][materials] failed material={material_id}: {exc}", flush=True)
+            print(f"[BACKEND][materials] failed material={material_id}: {exc}", flush=True)
 
     def get_view_url(
         self,

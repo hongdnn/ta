@@ -29,12 +29,12 @@ def init_mongo_schema() -> None:
     for model in MODEL_DEFS:
         collection = create_collection_with_validator(db, model.COLLECTION_NAME, model.VALIDATOR)
         model.apply_indexes(collection)
-    print(f"[TA-BACKEND] Mongo schema initialized for db='{db_name}'", flush=True)
+    print(f"[BACKEND] Mongo schema initialized for db='{db_name}'", flush=True)
     client.close()
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="TA backend MongoDB schema tools")
+    parser = argparse.ArgumentParser(description="backend MongoDB schema tools")
     parser.add_argument(
         "command",
         choices=["init"],
